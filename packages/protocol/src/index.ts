@@ -24,7 +24,9 @@ export type ErrorCode =
   | 'internal'
   | 'not_found'
   | 'bad_request'
-  | 'peer_forbidden';
+  | 'peer_forbidden'
+  | 'systemd_unavailable'
+  | 'unit_not_allowed';
 
 /** The structured error envelope every agent error response conforms to. */
 export interface ApiError {
@@ -134,4 +136,42 @@ export interface DiskMetrics {
   writes: number;
   read_sectors: number;
   write_sectors: number;
+}
+
+// ---------------------------------------------------------------------------
+// Services — systemd units (M2).
+//   GET  /v1/services            → Service[]
+//   GET  /v1/services/:unit      → Service
+//   POST /v1/services/:unit/{start,stop,restart}
+//   GET  /v1/services/:unit/logs?follow=1  → SSE of LogLine
+// ---------------------------------------------------------------------------
+
+/** A systemd unit as projected by the agent. */
+export interface Service {
+  /** Unit name, e.g. `nginx.service`. */
+  name: string;
+  description: string;
+  /** loaded | not-found | error | masked … */
+  load_state: string;
+  /** active | inactive | failed | activating | deactivating … */
+  active_state: string;
+  /** running | dead | exited | listening … */
+  sub_state: string;
+  /**
+   * Whether write actions (start/stop/restart) are permitted on this unit by
+   * the host's unit_allowlist. The UI enables or visibly disables the action
+   * controls on this flag — the boundary is shown, not hidden.
+   */
+  writable: boolean;
+}
+
+/** One journald entry, as streamed from GET /v1/services/:unit/logs. */
+export interface LogLine {
+  /** Entry time as a Unix timestamp in milliseconds. */
+  timestamp: number;
+  /** syslog priority 0 (emerg) … 7 (debug); defaults to 6 (info). */
+  priority: number;
+  message: string;
+  /** Emitting unit, when journald reports one. */
+  unit: string;
 }

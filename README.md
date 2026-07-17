@@ -45,20 +45,28 @@ decisions, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the milestone plan.
 
 ## Status
 
-**M1 — agent core (in progress).** The security spine is in: strict TOML
-config, the **bind guard** (resolves the WireGuard interface and refuses to
+**M2 — systemd (in progress).** The agent projects systemd units over D-Bus
+behind a fakeable `Conn` interface (`godbus`, `CGO_ENABLED=0`). It serves
+`GET /v1/services`, `GET /v1/services/:unit`,
+`POST /v1/services/:unit/{start,stop,restart}`,
+`GET /v1/services/:unit/logs?follow=1`, and a live `GET /v1/services/stream`
+(SSE, driven by D-Bus signals, not polling). Write actions are gated by the
+**unit allowlist at the handler boundary** (403 + audit); read scope comes from
+`read_allowlist`. Logs shell out to `journalctl -o json` with a strict
+process lifecycle — a client disconnect kills and reaps the subprocess, no
+orphans. Systemd is capability-gated: on a host without it every route returns
+`systemd_unavailable`. All fixture-tested with a fake `Conn` and a fake
+`journalctl` — no D-Bus or systemd required.
+
+**M1 — agent core (done).** Strict TOML config, the **bind guard** (refuses to
 start on an unspecified, loopback, or out-of-subnet address), and the **peer
-allowlist** middleware. On top of it the agent serves `GET /v1/info`,
-`GET /v1/metrics`, and `GET /v1/metrics/stream` (SSE), fed by a
-subscription-driven sampler that reads nothing when nobody is watching. Idle RSS
-is ~6 MB (budget < 20 MB). Everything is fixture-tested — no root, systemd, or
-Docker required — and the `/proc/stat` and sampler hot paths are benchmarked in
-CI. See [`deploy/agent.example.toml`](./deploy/agent.example.toml) and
-[`deploy/oikos-agent.service`](./deploy/oikos-agent.service).
+allowlist** middleware. `GET /v1/info`, `GET /v1/metrics`, and
+`GET /v1/metrics/stream` (SSE), fed by a subscription-driven sampler that reads
+nothing when nobody is watching. Idle RSS ~6 MB (budget < 20 MB).
 
 **M0 — skeleton and release pipeline (done).** Static `CGO_ENABLED=0` binary;
-CI gates the agent (`go vet`, `staticcheck`, tests, benchmarks) and the protocol
-package (`tsc`, `eslint`); a tag `agent-v*` produces a checksummed,
+CI gates the agent (`go vet`, `staticcheck`, `go test -race`, benchmarks) and
+the protocol package (`tsc`, `eslint`); a tag `agent-v*` produces a checksummed,
 provenance-attested GitHub Release for `linux/amd64` and `linux/arm64`.
 
 ## Building the agent

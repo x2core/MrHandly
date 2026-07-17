@@ -16,8 +16,10 @@ import (
 	"github.com/x2core/mrhandly/agent/internal/audit"
 	"github.com/x2core/mrhandly/agent/internal/config"
 	"github.com/x2core/mrhandly/agent/internal/fingerprint"
+	"github.com/x2core/mrhandly/agent/internal/journal"
 	"github.com/x2core/mrhandly/agent/internal/protocol"
 	"github.com/x2core/mrhandly/agent/internal/sampler"
+	"github.com/x2core/mrhandly/agent/internal/systemd"
 )
 
 // Deps are the collaborators an API server needs.
@@ -31,6 +33,14 @@ type Deps struct {
 	// OneShot returns a single fresh metrics frame for GET /v1/metrics.
 	OneShot func() (protocol.Metrics, error)
 	Audit   *audit.Logger
+
+	// Services projects systemd units. Nil when systemd is unavailable on the
+	// host, in which case every /v1/services route returns systemd_unavailable.
+	Services *systemd.Manager
+	// ServicesStream is the event-driven source backing GET /v1/services/stream.
+	ServicesStream *sampler.EventSource[[]protocol.Service]
+	// Journal streams journald logs for GET /v1/services/:unit/logs.
+	Journal *journal.Streamer
 }
 
 // Server serves the agent API.
@@ -45,6 +55,11 @@ func New(deps Deps) *Server {
 	s.mux.HandleFunc("GET /v1/info", s.handleInfo)
 	s.mux.HandleFunc("GET /v1/metrics", s.handleMetrics)
 	s.mux.HandleFunc("GET /v1/metrics/stream", s.handleMetricsStream)
+	s.mux.HandleFunc("GET /v1/services", s.handleServices)
+	s.mux.HandleFunc("GET /v1/services/stream", s.handleServicesStream)
+	s.mux.HandleFunc("GET /v1/services/{unit}", s.handleService)
+	s.mux.HandleFunc("GET /v1/services/{unit}/logs", s.handleServiceLogs)
+	s.mux.HandleFunc("POST /v1/services/{unit}/{action}", s.handleServiceAction)
 	s.mux.HandleFunc("/", s.handleNotFound)
 	return s
 }

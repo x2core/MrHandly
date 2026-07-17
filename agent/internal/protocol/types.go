@@ -12,10 +12,12 @@ const Version = 1
 type ErrorCode string
 
 const (
-	ErrInternal      ErrorCode = "internal"
-	ErrNotFound      ErrorCode = "not_found"
-	ErrBadRequest    ErrorCode = "bad_request"
-	ErrPeerForbidden ErrorCode = "peer_forbidden"
+	ErrInternal           ErrorCode = "internal"
+	ErrNotFound           ErrorCode = "not_found"
+	ErrBadRequest         ErrorCode = "bad_request"
+	ErrPeerForbidden      ErrorCode = "peer_forbidden"
+	ErrSystemdUnavailable ErrorCode = "systemd_unavailable"
+	ErrUnitNotAllowed     ErrorCode = "unit_not_allowed"
 )
 
 // APIError is the structured error envelope for every agent error response.
@@ -104,4 +106,24 @@ type DiskMetrics struct {
 	Writes       uint64 `json:"writes"`
 	ReadSectors  uint64 `json:"read_sectors"`
 	WriteSectors uint64 `json:"write_sectors"`
+}
+
+// Service is a systemd unit as projected by the agent (M2).
+type Service struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	LoadState   string `json:"load_state"`
+	ActiveState string `json:"active_state"`
+	SubState    string `json:"sub_state"`
+	// Writable reports whether the host's unit_allowlist permits write actions
+	// on this unit. The UI shows the boundary rather than hiding it.
+	Writable bool `json:"writable"`
+}
+
+// LogLine is one journald entry streamed from GET /v1/services/:unit/logs.
+type LogLine struct {
+	Timestamp int64  `json:"timestamp"` // unix milliseconds
+	Priority  int    `json:"priority"`  // syslog 0..7, default 6
+	Message   string `json:"message"`
+	Unit      string `json:"unit"`
 }

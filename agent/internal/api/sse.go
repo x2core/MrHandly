@@ -21,11 +21,7 @@ func (s *Server) handleMetricsStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Connection", "keep-alive")
-	w.WriteHeader(http.StatusOK)
+	setSSEHeaders(w)
 
 	// Immediate snapshot.
 	if m, err := s.deps.OneShot(); err == nil {
@@ -49,6 +45,15 @@ func (s *Server) handleMetricsStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+// setSSEHeaders writes the standard Server-Sent Events headers and status.
+func setSSEHeaders(w http.ResponseWriter) {
+	h := w.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
 }
 
 // writeSSE writes one SSE "data:" event carrying the JSON encoding of v.
