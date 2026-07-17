@@ -1,0 +1,43 @@
+# No compiled binaries in git. Ever. (CLAUDE.md §4.6)
+# CI builds, Releases publishes, checksums verify. If you are about to `git add`
+# a binary, the answer is no — tag a release instead.
+oikos-agent
+oikos-agent-*
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.o
+*.test
+*.out
+
+# Agent (Go) build output
+/agent/dist/
+/agent/vendor/
+
+# GoReleaser output
+/dist/
+
+# Desktop (Tauri / Rust) build output
+/desktop/src-tauri/target/
+**/target/
+
+# Node / TypeScript
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+
+# Local env / secrets — never commit
+*.env
+.env
+.env.*
+!.env.example
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/

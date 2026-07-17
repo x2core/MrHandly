@@ -1,0 +1,91 @@
+name: agent-release
+
+# Cut an agent release from a prefixed tag, e.g.:
+#   git tag agent-v0.0.1 && git push origin agent-v0.0.1
+#
+# The agent's Go module lives in agent/ and its tags are prefixed `agent-`
+# (the desktop app releases separately). GoReleaser's monorepo tag_prefix is a
+# Pro-only feature, so this pipeline is hand-rolled instead: it is small, fully
+# auditable, and honours the M0 done-criteria exactly — two static binaries, a
+# checksums.txt that `sha256sum -c` verifies, and a build-provenance
+# attestation over the published artifacts.
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+
+permissions:
+  contents: write # create the GitHub Release and upload artifacts
+  id-token: write # OIDC token for build provenance
+  attestations: write # write the provenance attestation
+
+jobs:
+  release:
+    name: build & release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for the release notes
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: agent/go.mod
+
+      - name: Derive version from tag
+        id: meta
+        run: |
+          tag="${GITHUB_REF_NAME}"       # e.g. agent-v0.0.1
+          version="${tag#agent-}"        # -> v0.0.1
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          # Anything with a pre-release suffix (agent-v0.1.0-rc1) is a prerelease.
+          if [[ "${version}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & package (linux/amd64 + linux/arm64, CGO off)
+        working-directory: agent
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          VERSION: ${{ steps.meta.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          date_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p ../dist
+          for arch in amd64 arm64; do
+            echo "==> building linux/${arch}"
+            GOARCH="${arch}" go build -trimpath \
+              -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${date_utc}" \
+              -o oikos-agent ./cmd/oikos-agent
+            tar -czf "../dist/oikos-agent_${VERSION}_linux_${arch}.tar.gz" oikos-agent
+            rm -f oikos-agent
+          done
+
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum *.tar.gz | tee checksums.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/checksums.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Agent ${{ steps.meta.outputs.version }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/oikos-agent_*.tar.gz
+            dist/checksums.txt

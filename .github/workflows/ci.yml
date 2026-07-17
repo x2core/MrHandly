@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent:
+    name: agent (go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: agent/go.mod
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          "$(go env GOPATH)/bin/staticcheck" ./...
+
+      - name: test
+        run: go test ./...
+
+      - name: bench (smoke — compile and run once)
+        run: go test -run '^$' -bench . -benchtime 1x -benchmem ./...
+
+      - name: build (CGO off, must stay static)
+        env:
+          CGO_ENABLED: '0'
+        run: go build ./...
+
+  protocol:
+    name: protocol (ts)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/protocol
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: packages/protocol/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: typecheck (tsc)
+        run: pnpm typecheck
+
+      - name: lint (eslint)
+        run: pnpm lint
+
+  # The desktop app (Tauri: Rust core + React) is scaffolded in M4. Its lint
+  # gate — cargo clippy + tsc + eslint — is wired here as soon as
+  # desktop/src-tauri/Cargo.toml exists, so a half-built desktop can never land
+  # unchecked. Until then this job is a no-op rather than a fake green.
+  desktop:
+    name: desktop (rust + ts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: detect desktop scaffold
+        id: detect
+        run: |
+          if [ -f desktop/src-tauri/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::desktop app not scaffolded yet (arrives in M4) — skipping clippy/tsc/eslint"
+          fi
+
+      - name: cargo clippy
+        if: steps.detect.outputs.present == 'true'
+        working-directory: desktop/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
