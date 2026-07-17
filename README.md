@@ -45,11 +45,65 @@ decisions, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the milestone plan.
 
 ## Status
 
-**M0 — skeleton and release pipeline.** The agent builds to a static
-`CGO_ENABLED=0` binary that reports its version; CI gates the agent (`go vet`,
-`staticcheck`, tests) and the protocol package (`tsc`, `eslint`); a tag
-`agent-v*` produces a checksummed, provenance-attested GitHub Release for
-`linux/amd64` and `linux/arm64`. The real agent begins in M1.
+**M6 — Command palette (in progress).** A ⌘K `cmdk` palette resolves hosts,
+units, and containers across the whole fleet in one fuzzy index —
+`restart nginx on lab-02` without touching the mouse. Destructive actions
+(stop/restart) confirm inline in the palette; results raise a toast that uses
+the same verb as the action (Restart → *Restarted*). Screenshot-verified.
+
+**M5 — Services / Processes / Docker views (done).** The focus pane is
+now tabbed — Performance · Processes · Services · Docker · Logs — over one
+TanStack Table + Virtual primitive configured three ways. **Processes** is the
+Task Manager panel (virtualized, sort by CPU/RSS, subscribes on mount /
+unsubscribes on unmount); **Services** shows state LEDs with allowlisted actions
+enabled and the rest visibly disabled; **Docker** lists containers + images
+where present; the **Log viewer** streams journald and container logs
+(virtualized, follow-tail with break-on-scroll, level filter). New agent surface:
+`GET /v1/processes` + `/v1/processes/stream` (process table at 2s, only while
+watched). Verified: agent tests/bench, `desktop/core` `cargo test`, UI
+build/lint/typecheck, and screenshots of every tab.
+
+**M4 — Desktop shell (done).** First pixels. A Tauri app (Rust core +
+React/TS) with the signature **Fleet Strip**: one fixed-height row per host,
+always visible — name plate, uPlot sparklines (CPU/RAM/net), LED cluster — over
+a rack-mounted-instrument design system (warm graphite, IBM Plex, `tabular-nums`,
+colour-carries-state). Click a host to focus it in a Performance view; offline
+peers degrade to a labelled disconnected plate, never a blank panel. The
+webkit-free `desktop/core` crate (peers.toml + agent HTTP/SSE client) is unit
+tested; the React UI builds, typechecks, lints, and is screenshot-verified. See
+[`desktop/`](./desktop/).
+
+**M3 — Docker (done).** A Docker Engine client over the raw unix socket
+using plain `net/http` — no Docker SDK, API version pinned in the path. Serves
+`GET /v1/docker/containers`, `GET /v1/docker/containers/:id`,
+`POST /v1/docker/containers/:id/{start,stop,restart}`,
+`GET /v1/docker/containers/:id/logs?follow=1` (SSE, with the multiplexed
+stdout/stderr **frame demux**), and `GET /v1/docker/images`. Capability-gated:
+where no socket is dialable every route returns `docker_unavailable` and the
+capability is re-probed lazily. The socket is root-equivalent, so writes obey a
+`docker_read_only` flag at the handler boundary (`403 docker_read_only`,
+audited). Tested with an `httptest` engine over a temp unix socket replaying
+recorded Engine API payloads — no Docker daemon required.
+
+**M2 — systemd (done).** systemd units over D-Bus behind a fakeable `Conn`
+interface (`godbus`, `CGO_ENABLED=0`): `GET /v1/services`,
+`GET /v1/services/:unit`, `POST /v1/services/:unit/{start,stop,restart}`,
+`GET /v1/services/:unit/logs?follow=1`, and live `GET /v1/services/stream`
+(SSE, D-Bus signals not polling). Write actions gated by the **unit allowlist
+at the handler boundary** (403 + audit); logs shell out to `journalctl -o json`
+with a strict no-orphan process lifecycle. Capability-gated with
+`systemd_unavailable`.
+
+**M1 — agent core (done).** Strict TOML config, the **bind guard** (refuses to
+start on an unspecified, loopback, or out-of-subnet address), and the **peer
+allowlist** middleware. `GET /v1/info`, `GET /v1/metrics`, and
+`GET /v1/metrics/stream` (SSE), fed by a subscription-driven sampler that reads
+nothing when nobody is watching. Idle RSS ~6 MB (budget < 20 MB).
+
+**M0 — skeleton and release pipeline (done).** Static `CGO_ENABLED=0` binary;
+CI gates the agent (`go vet`, `staticcheck`, `go test -race`, benchmarks) and
+the protocol package (`tsc`, `eslint`); a tag `agent-v*` produces a checksummed,
+provenance-attested GitHub Release for `linux/amd64` and `linux/arm64`.
 
 ## Building the agent
 

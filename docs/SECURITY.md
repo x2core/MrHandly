@@ -43,8 +43,15 @@ To be completed in M8, but stated plainly even now:
 
 - A **compromised operator machine owns the fleet.** The desktop app holds the
   peer list and speaks to every agent.
-- **Docker socket access is root**, with no nuance. An agent with Docker access
-  is root-equivalent regardless of the user it runs as.
+- **Docker socket access is root**, with no nuance. An agent that can reach
+  `/var/run/docker.sock` is root-equivalent regardless of the user it runs as:
+  the Engine API can bind-mount the host root, run privileged containers, and
+  escape any sandbox. For hosts where container *visibility* is wanted but
+  *control* is not, set `docker_read_only = true` in the config — the agent
+  then lists and streams containers but refuses every start/stop/restart at the
+  handler boundary (`403 docker_read_only`, audited). This narrows the write
+  surface; it does **not** change the fact that read access to the socket is
+  itself powerful.
 - Nested / privileged container escapes are out of the agent's control.
 
 ## Reporting

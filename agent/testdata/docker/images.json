@@ -1,0 +1,14 @@
+[
+  {
+    "Id": "sha256:aaaaaaaaaaaa",
+    "RepoTags": ["nginx:latest"],
+    "Size": 142000000,
+    "Created": 1699000000
+  },
+  {
+    "Id": "sha256:bbbbbbbbbbbb",
+    "RepoTags": ["postgres:16"],
+    "Size": 379000000,
+    "Created": 1698000000
+  }
+]

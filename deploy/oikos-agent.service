@@ -1,0 +1,44 @@
+# oikos-agent systemd unit.
+#
+# The agent is a root-equivalent daemon that parses network input (CLAUDE.md
+# §4), so it runs under as much systemd sandboxing as M1 allows. A fuller
+# hardening pass — a dedicated non-root user, polkit rules, a trimmed
+# CapabilityBoundingSet — lands in M8.
+
+[Unit]
+Description=Oikos fleet agent
+Documentation=https://github.com/x2core/mrhandly
+# Bind to the WireGuard interface only. The agent's own bind guard is the real
+# enforcement; this ordering just avoids a noisy refuse-and-restart at boot.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/oikos-agent -config /etc/oikos/agent.toml
+Restart=on-failure
+RestartSec=2
+
+# Keep the Go runtime's footprint inside the performance budget (CLAUDE.md §8).
+# GOMEMLIMIT is a soft ceiling; GOGC trades a little CPU for a smaller heap.
+Environment=GOMEMLIMIT=32MiB
+Environment=GOGC=50
+
+# --- Sandboxing (M1 baseline; expanded in M8) ---
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+# The agent reads /proc and /sys and needs no write access to the host tree.
+ReadOnlyPaths=/
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

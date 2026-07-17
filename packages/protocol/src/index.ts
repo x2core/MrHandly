@@ -1,11 +1,9 @@
 // @oikos/protocol — the single source of truth for the Oikos wire API.
 //
-// Types declared here are mirrored into Go (CLAUDE.md §10); if the two sides
-// drift, that is a bug, not a variation. Agent errors carry a stable `code`
-// and the UI switches on `code`, never on message text.
-//
-// M0 ships only the version handshake and the shared error envelope. The real
-// payloads — `Info`, `Metrics`, and the SSE frames — land in M1.
+// Types declared here are mirrored into Go, byte-for-byte on the JSON shape
+// (agent/internal/protocol). If the two sides drift, that is a bug, not a
+// variation (CLAUDE.md §10). Agent errors carry a stable `code`; the UI
+// switches on `code`, never on message text.
 
 /**
  * Protocol version negotiated between the desktop app and each agent. Bumped
@@ -13,19 +11,222 @@
  */
 export const PROTOCOL_VERSION = 1 as const;
 
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
 /**
  * Stable machine-readable error codes returned by the agent. The UI switches
- * on these; message text is for humans and may change freely.
- *
- * More codes are added as endpoints land (`docker_unavailable`,
- * `unit_not_allowed`, `peer_forbidden`, …). M0 defines only the baseline.
+ * on these; message text is for humans and may change freely. More codes are
+ * added as endpoints land (`docker_unavailable`, `unit_not_allowed`, …).
  */
-export type ErrorCode = 'internal' | 'not_found' | 'bad_request';
+export type ErrorCode =
+  | 'internal'
+  | 'not_found'
+  | 'bad_request'
+  | 'peer_forbidden'
+  | 'systemd_unavailable'
+  | 'unit_not_allowed'
+  | 'docker_unavailable'
+  | 'docker_read_only';
 
 /** The structured error envelope every agent error response conforms to. */
 export interface ApiError {
   /** Stable, switchable identifier. */
   code: ErrorCode;
   /** Human-readable description. Never parse this. */
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// GET /v1/info — identity and capabilities, cached at agent start.
+// ---------------------------------------------------------------------------
+
+export interface Info {
+  /** Wire protocol version; matches {@link PROTOCOL_VERSION}. */
+  protocol: number;
+  agent: AgentInfo;
+  host: HostInfo;
+  capabilities: Capabilities;
+}
+
+export interface AgentInfo {
+  /** Semver release, or a git describe for dev builds. */
+  version: string;
+  /** Full commit SHA the binary was built from. */
+  commit: string;
+}
+
+export interface HostInfo {
+  hostname: string;
+  /** Kernel release, e.g. `6.1.0-18-amd64`. */
+  kernel: string;
+  /** Pretty distro name from /etc/os-release, e.g. `Debian GNU/Linux 12`. */
+  distro: string;
+  /** GOARCH of the running binary, e.g. `amd64`, `arm64`. */
+  arch: string;
+  /** Number of logical CPUs. */
+  cpus: number;
+  /** Total physical memory in bytes. */
+  total_memory: number;
+  /** Boot time as a Unix timestamp in seconds. */
+  boot_time: number;
+}
+
+export interface Capabilities {
+  /** systemd is the init system and its D-Bus API is reachable. */
+  systemd: boolean;
+  /** A dialable Docker socket is present (re-probed lazily). */
+  docker: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// GET /v1/metrics and GET /v1/metrics/stream (SSE) — a live host projection.
+// ---------------------------------------------------------------------------
+
+export interface Metrics {
+  /** Sample time as a Unix timestamp in milliseconds. */
+  timestamp: number;
+  cpu: CpuMetrics;
+  memory: MemoryMetrics;
+  load: LoadMetrics;
+  /** Seconds since boot. */
+  uptime_seconds: number;
+  /** Per-interface cumulative counters, keyed by interface name. */
+  network: Record<string, NetDevMetrics>;
+  /** Per-device cumulative counters, keyed by device name. */
+  disk: Record<string, DiskMetrics>;
+}
+
+export interface CpuMetrics {
+  /** Aggregate busy fraction over the sample interval, 0..1. */
+  usage: number;
+  /** Per-core busy fraction over the sample interval, 0..1. */
+  per_core: number[];
+}
+
+export interface MemoryMetrics {
+  /** All values in bytes. */
+  total: number;
+  /** total - available. */
+  used: number;
+  free: number;
+  available: number;
+  buffers: number;
+  cached: number;
+  swap_total: number;
+  swap_used: number;
+}
+
+export interface LoadMetrics {
+  one: number;
+  five: number;
+  fifteen: number;
+}
+
+/** Cumulative byte/packet counters for one network interface. */
+export interface NetDevMetrics {
+  rx_bytes: number;
+  tx_bytes: number;
+  rx_packets: number;
+  tx_packets: number;
+}
+
+/** Cumulative I/O counters for one block device. Sectors are 512 bytes. */
+export interface DiskMetrics {
+  reads: number;
+  writes: number;
+  read_sectors: number;
+  write_sectors: number;
+}
+
+// ---------------------------------------------------------------------------
+// Services — systemd units (M2).
+//   GET  /v1/services            → Service[]
+//   GET  /v1/services/:unit      → Service
+//   POST /v1/services/:unit/{start,stop,restart}
+//   GET  /v1/services/:unit/logs?follow=1  → SSE of LogLine
+// ---------------------------------------------------------------------------
+
+/** A systemd unit as projected by the agent. */
+export interface Service {
+  /** Unit name, e.g. `nginx.service`. */
+  name: string;
+  description: string;
+  /** loaded | not-found | error | masked … */
+  load_state: string;
+  /** active | inactive | failed | activating | deactivating … */
+  active_state: string;
+  /** running | dead | exited | listening … */
+  sub_state: string;
+  /**
+   * Whether write actions (start/stop/restart) are permitted on this unit by
+   * the host's unit_allowlist. The UI enables or visibly disables the action
+   * controls on this flag — the boundary is shown, not hidden.
+   */
+  writable: boolean;
+}
+
+/** One journald entry, as streamed from GET /v1/services/:unit/logs. */
+export interface LogLine {
+  /** Entry time as a Unix timestamp in milliseconds. */
+  timestamp: number;
+  /** syslog priority 0 (emerg) … 7 (debug); defaults to 6 (info). */
+  priority: number;
+  message: string;
+  /** Emitting unit, when journald reports one. */
+  unit: string;
+}
+
+// ---------------------------------------------------------------------------
+// Docker — capability-gated (M3). Present only where a dialable Docker socket
+// exists; otherwise every route returns `docker_unavailable` and
+// Info.capabilities.docker is false.
+//   GET  /v1/docker/containers
+//   GET  /v1/docker/containers/:id
+//   POST /v1/docker/containers/:id/{start,stop,restart}
+//   GET  /v1/docker/containers/:id/logs?follow=1  → SSE of ContainerLog
+//   GET  /v1/docker/images
+// ---------------------------------------------------------------------------
+
+/** A Docker container as projected by the agent. */
+export interface Container {
+  /** Full container ID. */
+  id: string;
+  /** Primary name, with the leading slash stripped. */
+  name: string;
+  /** Image reference. */
+  image: string;
+  /** created | running | paused | restarting | exited | dead. */
+  state: string;
+  /** Human status, e.g. `Up 3 hours`, `Exited (0) 2 minutes ago`. */
+  status: string;
+  /** Creation time as a Unix timestamp in seconds. */
+  created: number;
+  /**
+   * Whether write actions are permitted. False on hosts configured
+   * `docker_read_only`, where container control is disabled.
+   */
+  writable: boolean;
+}
+
+/** A Docker image as projected by the agent. */
+export interface Image {
+  /** Full image ID (sha256:…). */
+  id: string;
+  /** Repository tags, e.g. `["nginx:latest"]`. May be empty. */
+  tags: string[];
+  /** Size on disk in bytes. */
+  size: number;
+  /** Creation time as a Unix timestamp in seconds. */
+  created: number;
+}
+
+/** One line of container output from the logs stream. */
+export interface ContainerLog {
+  /** stdout | stderr. */
+  stream: string;
+  /** Entry time as a Unix timestamp in milliseconds, or 0 if unknown. */
+  timestamp: number;
   message: string;
 }
