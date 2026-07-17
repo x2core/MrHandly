@@ -1,0 +1,18 @@
+[
+  {
+    "Id": "abc123def456",
+    "Names": ["/web"],
+    "Image": "nginx:latest",
+    "State": "running",
+    "Status": "Up 3 hours",
+    "Created": 1700000000
+  },
+  {
+    "Id": "789ghi012jkl",
+    "Names": ["/db"],
+    "Image": "postgres:16",
+    "State": "exited",
+    "Status": "Exited (0) 5 minutes ago",
+    "Created": 1699990000
+  }
+]

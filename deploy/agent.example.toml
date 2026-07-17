@@ -37,3 +37,8 @@ sample_interval = "1s"
 
 # Docker unix socket path. Optional; defaults to /var/run/docker.sock. (M3.)
 # docker_socket = "/var/run/docker.sock"
+
+# Disable container write actions (start/stop/restart) while still listing and
+# streaming containers. The Docker socket is root-equivalent, so set this on
+# hosts where visibility is wanted but control is not. Optional; default false.
+# docker_read_only = true

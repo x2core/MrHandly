@@ -18,6 +18,8 @@ const (
 	ErrPeerForbidden      ErrorCode = "peer_forbidden"
 	ErrSystemdUnavailable ErrorCode = "systemd_unavailable"
 	ErrUnitNotAllowed     ErrorCode = "unit_not_allowed"
+	ErrDockerUnavailable  ErrorCode = "docker_unavailable"
+	ErrDockerReadOnly     ErrorCode = "docker_read_only"
 )
 
 // APIError is the structured error envelope for every agent error response.
@@ -126,4 +128,32 @@ type LogLine struct {
 	Priority  int    `json:"priority"`  // syslog 0..7, default 6
 	Message   string `json:"message"`
 	Unit      string `json:"unit"`
+}
+
+// Container is a Docker container as projected by the agent (M3).
+type Container struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Image   string `json:"image"`
+	State   string `json:"state"`
+	Status  string `json:"status"`
+	Created int64  `json:"created"` // unix seconds
+	// Writable is false on hosts configured docker_read_only.
+	Writable bool `json:"writable"`
+}
+
+// Image is a Docker image as projected by the agent (M3).
+type Image struct {
+	ID      string   `json:"id"`
+	Tags    []string `json:"tags"`
+	Size    int64    `json:"size"`
+	Created int64    `json:"created"` // unix seconds
+}
+
+// ContainerLog is one line of container output streamed from
+// GET /v1/docker/containers/:id/logs.
+type ContainerLog struct {
+	Stream    string `json:"stream"` // stdout | stderr
+	Timestamp int64  `json:"timestamp"`
+	Message   string `json:"message"`
 }

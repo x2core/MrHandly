@@ -41,6 +41,11 @@ type Config struct {
 	SampleInterval Duration `toml:"sample_interval"`
 	// DockerSocket is the path to the Docker unix socket (M3).
 	DockerSocket string `toml:"docker_socket"`
+	// DockerReadOnly disables container write actions (start/stop/restart)
+	// even where a Docker socket is present. The socket is root-equivalent, so
+	// this is the switch for hosts where visibility is wanted but control is
+	// not (docs/ROADMAP.md M3, SECURITY.md).
+	DockerReadOnly bool `toml:"docker_read_only"`
 
 	subnet netip.Prefix
 	peers  map[netip.Addr]struct{}
@@ -142,6 +147,9 @@ func (c *Config) UnitReadable(unit string) bool {
 	}
 	return matchAny(c.ReadAllowlist, unit)
 }
+
+// DockerWritable reports whether Docker container write actions are permitted.
+func (c *Config) DockerWritable() bool { return !c.DockerReadOnly }
 
 func matchAny(globs []string, s string) bool {
 	for _, g := range globs {

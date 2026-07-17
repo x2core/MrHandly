@@ -15,6 +15,7 @@ import (
 
 	"github.com/x2core/mrhandly/agent/internal/audit"
 	"github.com/x2core/mrhandly/agent/internal/config"
+	"github.com/x2core/mrhandly/agent/internal/docker"
 	"github.com/x2core/mrhandly/agent/internal/fingerprint"
 	"github.com/x2core/mrhandly/agent/internal/journal"
 	"github.com/x2core/mrhandly/agent/internal/protocol"
@@ -41,6 +42,13 @@ type Deps struct {
 	ServicesStream *sampler.EventSource[[]protocol.Service]
 	// Journal streams journald logs for GET /v1/services/:unit/logs.
 	Journal *journal.Streamer
+
+	// Docker is the Engine client. Nil when no dialable socket is present, in
+	// which case every /v1/docker route returns docker_unavailable.
+	Docker *docker.Client
+	// DockerWritable is false on hosts configured docker_read_only; container
+	// write actions are then refused at the handler boundary.
+	DockerWritable bool
 }
 
 // Server serves the agent API.
@@ -60,6 +68,11 @@ func New(deps Deps) *Server {
 	s.mux.HandleFunc("GET /v1/services/{unit}", s.handleService)
 	s.mux.HandleFunc("GET /v1/services/{unit}/logs", s.handleServiceLogs)
 	s.mux.HandleFunc("POST /v1/services/{unit}/{action}", s.handleServiceAction)
+	s.mux.HandleFunc("GET /v1/docker/containers", s.handleContainers)
+	s.mux.HandleFunc("GET /v1/docker/images", s.handleImages)
+	s.mux.HandleFunc("GET /v1/docker/containers/{id}", s.handleContainer)
+	s.mux.HandleFunc("GET /v1/docker/containers/{id}/logs", s.handleContainerLogs)
+	s.mux.HandleFunc("POST /v1/docker/containers/{id}/{action}", s.handleContainerAction)
 	s.mux.HandleFunc("/", s.handleNotFound)
 	return s
 }

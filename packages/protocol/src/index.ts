@@ -26,7 +26,9 @@ export type ErrorCode =
   | 'bad_request'
   | 'peer_forbidden'
   | 'systemd_unavailable'
-  | 'unit_not_allowed';
+  | 'unit_not_allowed'
+  | 'docker_unavailable'
+  | 'docker_read_only';
 
 /** The structured error envelope every agent error response conforms to. */
 export interface ApiError {
@@ -174,4 +176,57 @@ export interface LogLine {
   message: string;
   /** Emitting unit, when journald reports one. */
   unit: string;
+}
+
+// ---------------------------------------------------------------------------
+// Docker — capability-gated (M3). Present only where a dialable Docker socket
+// exists; otherwise every route returns `docker_unavailable` and
+// Info.capabilities.docker is false.
+//   GET  /v1/docker/containers
+//   GET  /v1/docker/containers/:id
+//   POST /v1/docker/containers/:id/{start,stop,restart}
+//   GET  /v1/docker/containers/:id/logs?follow=1  → SSE of ContainerLog
+//   GET  /v1/docker/images
+// ---------------------------------------------------------------------------
+
+/** A Docker container as projected by the agent. */
+export interface Container {
+  /** Full container ID. */
+  id: string;
+  /** Primary name, with the leading slash stripped. */
+  name: string;
+  /** Image reference. */
+  image: string;
+  /** created | running | paused | restarting | exited | dead. */
+  state: string;
+  /** Human status, e.g. `Up 3 hours`, `Exited (0) 2 minutes ago`. */
+  status: string;
+  /** Creation time as a Unix timestamp in seconds. */
+  created: number;
+  /**
+   * Whether write actions are permitted. False on hosts configured
+   * `docker_read_only`, where container control is disabled.
+   */
+  writable: boolean;
+}
+
+/** A Docker image as projected by the agent. */
+export interface Image {
+  /** Full image ID (sha256:…). */
+  id: string;
+  /** Repository tags, e.g. `["nginx:latest"]`. May be empty. */
+  tags: string[];
+  /** Size on disk in bytes. */
+  size: number;
+  /** Creation time as a Unix timestamp in seconds. */
+  created: number;
+}
+
+/** One line of container output from the logs stream. */
+export interface ContainerLog {
+  /** stdout | stderr. */
+  stream: string;
+  /** Entry time as a Unix timestamp in milliseconds, or 0 if unknown. */
+  timestamp: number;
+  message: string;
 }
