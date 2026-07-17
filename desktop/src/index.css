@@ -13,7 +13,107 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ── Themes ──────────────────────────────────────────────────────────────
+   Each theme is a moodboard: a palette AND a vibe (radius / border / density).
+   Colours are RGB channel triplets. */
+
+:root,
+:root[data-theme='rack'] {
+  --c-panel: 27 26 24;
+  --c-rack: 35 34 32;
+  --c-rule: 53 51 47;
+  --c-plate: 138 133 120;
+  --c-readout: 237 234 227;
+  --c-signal: 232 163 61;
+  --c-fault: 210 69 60;
+
+  --radius: 2px;
+  --border: 1px;
+  --strip: 56px;
+  --pad-x: 0.75rem;
+  --pad-y: 0.5rem;
+  --glow: 0 0 6px;
+  --shadow: none;
+  color-scheme: dark;
+}
+
+/* Strawberry Hacker — phosphor green terminal, strawberry alarms. Boxy, glowy. */
+:root[data-theme='hacker'] {
+  --c-panel: 8 12 8;
+  --c-rack: 13 20 14;
+  --c-rule: 26 46 30;
+  --c-plate: 78 124 88;
+  --c-readout: 200 255 212;
+  --c-signal: 53 255 107;
+  --c-fault: 255 59 107;
+
+  --radius: 0px;
+  --border: 1px;
+  --strip: 54px;
+  --pad-x: 0.7rem;
+  --pad-y: 0.45rem;
+  --glow: 0 0 8px;
+  --shadow: none;
+  color-scheme: dark;
+}
+
+/* Premium blue-grey corporate — calm, rounded, comfortable spacing. */
+:root[data-theme='corporate'] {
+  --c-panel: 20 24 31;
+  --c-rack: 27 33 43;
+  --c-rule: 44 53 67;
+  --c-plate: 138 151 168;
+  --c-readout: 231 236 243;
+  --c-signal: 79 143 240;
+  --c-fault: 229 72 77;
+
+  --radius: 7px;
+  --border: 1px;
+  --strip: 60px;
+  --pad-x: 0.95rem;
+  --pad-y: 0.6rem;
+  --glow: 0 0 6px;
+  --shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+}
+
+/* White commercial dashboard — light, airy, soft cards. */
+:root[data-theme='dashboard'] {
+  --c-panel: 244 246 250;
+  --c-rack: 255 255 255;
+  --c-rule: 224 230 238;
+  --c-plate: 100 116 139;
+  --c-readout: 24 33 51;
+  --c-signal: 37 99 235;
+  --c-fault: 220 38 38;
+
+  --radius: 10px;
+  --border: 1px;
+  --strip: 62px;
+  --pad-x: 1rem;
+  --pad-y: 0.65rem;
+  --glow: 0 0 0;
+  --shadow: 0 6px 18px rgb(30 41 59 / 0.10);
+  color-scheme: light;
+}
+
+/* Low brown industrial — heavy, boxy, thick borders. */
+:root[data-theme='industrial'] {
+  --c-panel: 33 28 23;
+  --c-rack: 44 37 30;
+  --c-rule: 70 57 45;
+  --c-plate: 160 139 110;
+  --c-readout: 232 221 203;
+  --c-signal: 198 119 47;
+  --c-fault: 181 67 46;
+
+  --radius: 0px;
+  --border: 2px;
+  --strip: 58px;
+  --pad-x: 0.85rem;
+  --pad-y: 0.6rem;
+  --glow: 0 0 5px;
+  --shadow: none;
   color-scheme: dark;
 }
 
@@ -32,19 +132,23 @@ body {
 }
 
 @layer components {
-  /* A silkscreen label plate: condensed, uppercase, wide tracking. */
   .plate {
     @apply font-plate uppercase text-plate;
   }
-
-  /* Any number, name or id: tabular mono so figures never jitter at 1 Hz. */
   .readout {
     @apply font-mono;
     font-variant-numeric: tabular-nums;
   }
+  /* Theme-driven density: padding scales with the active theme. */
+  .u-pad {
+    padding: var(--pad-y) var(--pad-x);
+  }
+  .u-pad-x {
+    padding-left: var(--pad-x);
+    padding-right: var(--pad-x);
+  }
 }
 
-/* Respect reduced motion: kill the only animation we have (LED crossfade). */
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

@@ -3,6 +3,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import uPlot from 'uplot'
+import { useThemeColors } from '../theme-colors'
 
 interface Props {
   values: number[]
@@ -18,6 +19,7 @@ export function PerfChart({ values, stroke, fill, max = 1, height = 130, yFormat
   const wrap = useRef<HTMLDivElement>(null)
   const plot = useRef<uPlot | null>(null)
   const [width, setWidth] = useState(320)
+  const theme = useThemeColors()
 
   useLayoutEffect(() => {
     const el = wrap.current
@@ -42,8 +44,8 @@ export function PerfChart({ values, stroke, fill, max = 1, height = 130, yFormat
       axes: [
         { show: false },
         {
-          stroke: '#8A8578',
-          grid: { stroke: '#2b2926', width: 1 },
+          stroke: theme.axis,
+          grid: { stroke: theme.grid, width: 1 },
           ticks: { show: false },
           size: 40,
           font: '10px "IBM Plex Mono"',
@@ -60,7 +62,7 @@ export function PerfChart({ values, stroke, fill, max = 1, height = 130, yFormat
       plot.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width, height, stroke, fill, max, yFormat])
+  }, [width, height, stroke, fill, max, yFormat, theme.axis, theme.grid])
 
   useEffect(() => {
     plot.current?.setData([values.map((_, i) => i), values])

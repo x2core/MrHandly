@@ -3,9 +3,9 @@
 // and the focus/Performance view for the selected host.
 
 import { useEffect, useState } from 'react'
-import { bridge, isMock } from './bridge'
+import { bridge } from './bridge'
 import { useFleet } from './store'
-import { TopBar } from './components/TopBar'
+import { Sidebar } from './components/Sidebar'
 import { FleetStrip } from './components/FleetStrip'
 import { FocusView } from './components/FocusView'
 import { PeerDialog, type DialogMode } from './components/PeerDialog'
@@ -46,20 +46,22 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <div className="flex h-full flex-col">
-        <TopBar onAdd={() => setDialog({ kind: 'add' })} mock={isMock} />
-        <FleetStrip />
-        {focused ? (
-          <FocusView
-            host={focused}
-            onRename={() => setDialog({ kind: 'rename', peer: focused.peer })}
-            onRemove={removeSelected}
-          />
-        ) : (
-          <div className="flex flex-1 items-center justify-center">
-            <span className="plate text-plate">Select a host to inspect it</span>
-          </div>
-        )}
+      <div className="flex h-full">
+        <Sidebar onAdd={() => setDialog({ kind: 'add' })} />
+        <main className="flex min-w-0 flex-1 flex-col">
+          <FleetStrip />
+          {focused ? (
+            <FocusView
+              host={focused}
+              onRename={() => setDialog({ kind: 'rename', peer: focused.peer })}
+              onRemove={removeSelected}
+            />
+          ) : (
+            <div className="flex flex-1 items-center justify-center">
+              <span className="plate text-plate">Select a host to inspect it</span>
+            </div>
+          )}
+        </main>
         <PeerDialog mode={dialog} onClose={() => setDialog(null)} />
         <CommandPalette />
       </div>

@@ -57,7 +57,7 @@ export function ServicesView({ address }: { address: string }) {
           const s = c.row.original
           const on = s.active_state === 'active'
           const failed = s.active_state === 'failed'
-          const cls = failed ? 'bg-fault shadow-[0_0_6px_#D2453C]' : on ? 'bg-signal shadow-[0_0_6px_#E8A33D]' : 'bg-rule'
+          const cls = failed ? 'bg-fault shadow-[var(--glow)_rgb(var(--c-fault))]' : on ? 'bg-signal shadow-[var(--glow)_rgb(var(--c-signal))]' : 'bg-rule'
           return <span className={`inline-block h-[7px] w-[7px] rounded-full ${cls}`} />
         },
       },

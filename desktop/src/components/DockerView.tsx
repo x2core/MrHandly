@@ -37,7 +37,7 @@ export function DockerView({ address }: { address: string }) {
           const on = c.row.original.state === 'running'
           return (
             <span
-              className={`inline-block h-[7px] w-[7px] rounded-full ${on ? 'bg-signal shadow-[0_0_6px_#E8A33D]' : 'bg-rule'}`}
+              className={`inline-block h-[7px] w-[7px] rounded-full ${on ? 'bg-signal shadow-[var(--glow)_rgb(var(--c-signal))]' : 'bg-rule'}`}
             />
           )
         },

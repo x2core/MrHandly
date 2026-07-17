@@ -12,8 +12,8 @@ export function Led({ on, kind = 'signal', label }: LedProps) {
   const lit = on ? (kind === 'fault' ? 'bg-fault' : 'bg-signal') : 'bg-rule'
   const glow = on
     ? kind === 'fault'
-      ? 'shadow-[0_0_6px_#D2453C]'
-      : 'shadow-[0_0_6px_#E8A33D]'
+      ? 'shadow-[var(--glow)_rgb(var(--c-fault))]'
+      : 'shadow-[var(--glow)_rgb(var(--c-signal))]'
     : ''
   return (
     <span className="flex items-center gap-1" title={label}>

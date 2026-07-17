@@ -1,11 +1,10 @@
-// The focus view: click a host and its detail pane opens below as a set of
-// tabs — Performance, Processes, Services, Docker, Logs — over the same peer.
-// Capability-gated tabs (Services/Docker/Logs) appear only where the host
-// supports them. An offline host keeps its layout and shows a disconnected
-// plate rather than vanishing.
+// The focus pane for the selected host. The detail tab is driven by the
+// sidebar's view-nav (useUi); this renders the matching surface. An offline
+// host keeps its layout and shows a disconnected plate rather than vanishing.
 
-import { useEffect, useState } from 'react'
 import type { HostState } from '../store'
+import { useUi, type FocusTab } from '../ui'
+import { useThemeColors } from '../theme-colors'
 import { bytes, pct, rate, uptime, sinceLabel } from '../format'
 import { PerfChart } from './PerfChart'
 import { Led } from './Led'
@@ -14,15 +13,18 @@ import { ServicesView } from './ServicesView'
 import { DockerView } from './DockerView'
 import { LogViewer } from './LogViewer'
 
-const SIGNAL = '#E8A33D'
-const SIGNAL_FILL = 'rgba(232,163,61,0.14)'
-
-type Tab = 'performance' | 'processes' | 'services' | 'docker' | 'logs'
-
 interface FocusProps {
   host: HostState
   onRename: () => void
   onRemove: () => void
+}
+
+function allowed(tab: FocusTab, systemd: boolean, docker: boolean, online: boolean): boolean {
+  if (!online) return tab === 'performance'
+  if (tab === 'services') return systemd
+  if (tab === 'docker') return docker
+  if (tab === 'logs') return systemd || docker
+  return true
 }
 
 export function FocusView({ host, onRename, onRemove }: FocusProps) {
@@ -30,30 +32,19 @@ export function FocusView({ host, onRename, onRemove }: FocusProps) {
   const systemd = !!info?.capabilities.systemd
   const docker = !!info?.capabilities.docker
 
-  const tabs: { id: Tab; label: string; show: boolean }[] = [
-    { id: 'performance', label: 'Performance', show: true },
-    { id: 'processes', label: 'Processes', show: online },
-    { id: 'services', label: 'Services', show: online && systemd },
-    { id: 'docker', label: 'Docker', show: online && docker },
-    { id: 'logs', label: 'Logs', show: online && (systemd || docker) },
-  ]
-
-  const [tab, setTab] = useState<Tab>('performance')
-  // Reset to a valid tab when the host (or its capabilities) change.
-  useEffect(() => {
-    if (!tabs.find((t) => t.id === tab && t.show)) setTab('performance')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [peer.address, online, systemd, docker])
+  const wanted = useUi((s) => s.tab)
+  const tab = allowed(wanted, systemd, docker, online) ? wanted : 'performance'
 
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-rule">
       {/* Header plate. */}
-      <div className="flex shrink-0 items-center justify-between border-b border-rule px-4 py-2">
+      <div className="u-pad flex shrink-0 items-center justify-between border-b border-rule">
         <div className="flex items-baseline gap-3">
           <span className="font-plate text-lg font-semibold uppercase tracking-wider text-readout">{peer.name}</span>
           <span className="readout text-xs text-plate">
             {peer.address}:{peer.port}
           </span>
+          <span className="plate rounded border border-rule px-1.5 py-0.5 text-[9px]">{cap(tab)}</span>
         </div>
         <div className="flex items-center gap-4">
           <Led on={online} kind={online ? 'signal' : 'fault'} label={online ? 'Online' : 'Offline'} />
@@ -79,27 +70,6 @@ export function FocusView({ host, onRename, onRemove }: FocusProps) {
         <Readout label="Uptime" value={latest ? uptime(latest.uptime_seconds) : '—'} />
       </div>
 
-      {/* Tab bar. */}
-      <div className="flex shrink-0 border-b border-rule bg-rack">
-        {tabs
-          .filter((t) => t.show)
-          .map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={[
-                'border-r border-rule px-4 py-2 font-plate text-[11px] uppercase tracking-wider transition-colors duration-led',
-                tab === t.id ? 'bg-panel text-readout' : 'text-plate hover:text-readout',
-              ].join(' ')}
-            >
-              <span className="flex items-center gap-2">
-                {tab === t.id && <span className="h-[6px] w-[6px] rounded-full bg-signal" />}
-                {t.label}
-              </span>
-            </button>
-          ))}
-      </div>
-
       {/* Tab content. */}
       <div className="flex min-h-0 flex-1 flex-col">
         {tab === 'performance' && <PerformanceTab host={host} />}
@@ -114,21 +84,22 @@ export function FocusView({ host, onRename, onRemove }: FocusProps) {
 
 function PerformanceTab({ host }: { host: HostState }) {
   const { hist, latest } = host
+  const c = useThemeColors()
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="grid flex-1 grid-cols-1 gap-px bg-rule lg:grid-cols-3">
         <Panel title="CPU" value={pct(hist.cpu.at(-1) ?? 0)}>
-          <PerfChart values={hist.cpu} stroke={SIGNAL} fill={SIGNAL_FILL} max={1} />
+          <PerfChart values={hist.cpu} stroke={c.signal} fill={c.signalFill} max={1} />
         </Panel>
         <Panel title="Memory" value={latest ? bytes(latest.memory.used) : '—'}>
-          <PerfChart values={hist.mem} stroke={SIGNAL} fill={SIGNAL_FILL} max={1} />
+          <PerfChart values={hist.mem} stroke={c.signal} fill={c.signalFill} max={1} />
         </Panel>
         <Panel title="Network" value={rate(hist.net.at(-1) ?? 0)}>
-          <PerfChart values={hist.net} stroke={SIGNAL} fill={SIGNAL_FILL} max="auto" yFormat={bytes} />
+          <PerfChart values={hist.net} stroke={c.signal} fill={c.signalFill} max="auto" yFormat={bytes} />
         </Panel>
       </div>
       {latest && (
-        <div className="flex shrink-0 items-center gap-6 border-t border-rule px-4 py-2">
+        <div className="u-pad flex shrink-0 items-center gap-6 border-t border-rule">
           <span className="plate">Load</span>
           <span className="readout text-sm">
             {latest.load.one.toFixed(2)} · {latest.load.five.toFixed(2)} · {latest.load.fifteen.toFixed(2)}
@@ -146,11 +117,15 @@ function PerformanceTab({ host }: { host: HostState }) {
 }
 
 const headerBtn =
-  'border border-rule px-2 py-1 font-plate text-[10px] uppercase tracking-wider text-plate transition-colors duration-led hover:text-readout'
+  'rounded border border-rule px-2 py-1 font-plate text-[10px] uppercase tracking-wider text-plate transition-colors duration-led hover:text-readout'
+
+function cap(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
 
 function Readout({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 border-l border-rule px-3 py-1">
+    <div className="u-pad flex flex-col gap-0.5 border-l border-rule">
       <span className="plate">{label}</span>
       <span className="readout text-sm text-readout">{value}</span>
     </div>
