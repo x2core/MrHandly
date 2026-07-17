@@ -1,0 +1,39 @@
+# Oikos agent configuration. Install to /etc/oikos/agent.toml.
+#
+# Validation is strict: unknown keys are a startup error, so a typo in a
+# security setting fails loudly instead of being silently ignored.
+
+# The WireGuard interface the agent binds to. The bind guard resolves this to
+# an address and refuses to start unless that address is inside `subnet` and is
+# neither unspecified nor loopback. The agent never binds 0.0.0.0.
+interface = "wg0"
+
+# The WireGuard subnet, in CIDR form. Any interface address outside it is
+# refused.
+subnet = "10.44.0.0/24"
+
+# TCP port served on the interface address. Optional; defaults to 8443.
+listen_port = 8443
+
+# Source-IP allowlist. Only these peers are served — WireGuard cryptokey
+# routing makes the in-tunnel source IP an unforgeable credential.
+peers = [
+  "10.44.0.1", # operator laptop
+]
+
+# Write-action allowlist (start/stop/restart), matched as globs against unit
+# names. Default deny: an empty list means no unit is writable. (Used from M2.)
+unit_allowlist = [
+  # "nginx.service",
+  # "docker.service",
+]
+
+# Read-scope allowlist, matched as globs. An empty list means "read anything" —
+# read scope may be wider than write scope. (Used from M2.)
+read_allowlist = []
+
+# Aggregate metric sampling tick. Optional; defaults to "1s".
+sample_interval = "1s"
+
+# Docker unix socket path. Optional; defaults to /var/run/docker.sock. (M3.)
+# docker_socket = "/var/run/docker.sock"

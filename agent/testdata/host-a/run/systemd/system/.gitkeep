@@ -1,0 +1,1 @@
+# keeps the systemd runtime dir in git so the fingerprint probe fixture survives checkout

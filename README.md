@@ -45,11 +45,21 @@ decisions, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the milestone plan.
 
 ## Status
 
-**M0 — skeleton and release pipeline.** The agent builds to a static
-`CGO_ENABLED=0` binary that reports its version; CI gates the agent (`go vet`,
-`staticcheck`, tests) and the protocol package (`tsc`, `eslint`); a tag
-`agent-v*` produces a checksummed, provenance-attested GitHub Release for
-`linux/amd64` and `linux/arm64`. The real agent begins in M1.
+**M1 — agent core (in progress).** The security spine is in: strict TOML
+config, the **bind guard** (resolves the WireGuard interface and refuses to
+start on an unspecified, loopback, or out-of-subnet address), and the **peer
+allowlist** middleware. On top of it the agent serves `GET /v1/info`,
+`GET /v1/metrics`, and `GET /v1/metrics/stream` (SSE), fed by a
+subscription-driven sampler that reads nothing when nobody is watching. Idle RSS
+is ~6 MB (budget < 20 MB). Everything is fixture-tested — no root, systemd, or
+Docker required — and the `/proc/stat` and sampler hot paths are benchmarked in
+CI. See [`deploy/agent.example.toml`](./deploy/agent.example.toml) and
+[`deploy/oikos-agent.service`](./deploy/oikos-agent.service).
+
+**M0 — skeleton and release pipeline (done).** Static `CGO_ENABLED=0` binary;
+CI gates the agent (`go vet`, `staticcheck`, tests, benchmarks) and the protocol
+package (`tsc`, `eslint`); a tag `agent-v*` produces a checksummed,
+provenance-attested GitHub Release for `linux/amd64` and `linux/arm64`.
 
 ## Building the agent
 

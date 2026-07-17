@@ -36,10 +36,10 @@ jobs:
           "$(go env GOPATH)/bin/staticcheck" ./...
 
       - name: test
-        run: go test ./...
+        run: go test -race ./...
 
-      - name: bench (smoke — compile and run once)
-        run: go test -run '^$' -bench . -benchtime 1x -benchmem ./...
+      - name: bench (regression gate — sampler + procfs hot paths)
+        run: make bench
 
       - name: build (CGO off, must stay static)
         env:
