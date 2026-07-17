@@ -45,7 +45,13 @@ decisions, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the milestone plan.
 
 ## Status
 
-**M5 — Services / Processes / Docker views (in progress).** The focus pane is
+**M6 — Command palette (in progress).** A ⌘K `cmdk` palette resolves hosts,
+units, and containers across the whole fleet in one fuzzy index —
+`restart nginx on lab-02` without touching the mouse. Destructive actions
+(stop/restart) confirm inline in the palette; results raise a toast that uses
+the same verb as the action (Restart → *Restarted*). Screenshot-verified.
+
+**M5 — Services / Processes / Docker views (done).** The focus pane is
 now tabbed — Performance · Processes · Services · Docker · Logs — over one
 TanStack Table + Virtual primitive configured three ways. **Processes** is the
 Task Manager panel (virtualized, sort by CPU/RSS, subscribes on mount /

@@ -31,6 +31,7 @@ export interface Bridge {
   onMetrics(cb: (e: MetricsEvent) => void): () => void
 
   // M5 views.
+  fetchServices(address: string): Promise<Service[]>
   fetchContainers(address: string): Promise<Container[]>
   fetchImages(address: string): Promise<Image[]>
   serviceAction(address: string, unit: string, action: string): Promise<void>
@@ -74,6 +75,26 @@ function tauriBridge(): Bridge {
     onStatus: (cb) => listen<StatusEvent>('peer:status', cb),
     onMetrics: (cb) => listen<MetricsEvent>('peer:metrics', cb),
 
+    // Grab a single services snapshot via the stream, then unsubscribe.
+    fetchServices(address) {
+      return new Promise<Service[]>((resolve) => {
+        let off = () => {}
+        let done = false
+        off = this.subscribeServices(address, (items) => {
+          if (done) return
+          done = true
+          resolve(items)
+          off()
+        })
+        setTimeout(() => {
+          if (!done) {
+            done = true
+            resolve([])
+            off()
+          }
+        }, 4000)
+      })
+    },
     async fetchContainers(address) {
       return (await core()).invoke<Container[]>('fetch_containers', { address })
     },
@@ -251,6 +272,9 @@ function mockBridge(): Bridge {
       return () => metricsCbs.delete(cb)
     },
 
+    async fetchServices() {
+      return mockServices()
+    },
     async fetchContainers() {
       return mockContainers()
     },

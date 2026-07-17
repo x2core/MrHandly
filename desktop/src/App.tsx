@@ -9,6 +9,8 @@ import { TopBar } from './components/TopBar'
 import { FleetStrip } from './components/FleetStrip'
 import { FocusView } from './components/FocusView'
 import { PeerDialog, type DialogMode } from './components/PeerDialog'
+import { CommandPalette } from './components/CommandPalette'
+import { ToastProvider } from './components/Toast'
 
 export default function App() {
   const setPeers = useFleet((s) => s.setPeers)
@@ -43,21 +45,24 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <TopBar onAdd={() => setDialog({ kind: 'add' })} mock={isMock} />
-      <FleetStrip />
-      {focused ? (
-        <FocusView
-          host={focused}
-          onRename={() => setDialog({ kind: 'rename', peer: focused.peer })}
-          onRemove={removeSelected}
-        />
-      ) : (
-        <div className="flex flex-1 items-center justify-center">
-          <span className="plate text-plate">Select a host to inspect it</span>
-        </div>
-      )}
-      <PeerDialog mode={dialog} onClose={() => setDialog(null)} />
-    </div>
+    <ToastProvider>
+      <div className="flex h-full flex-col">
+        <TopBar onAdd={() => setDialog({ kind: 'add' })} mock={isMock} />
+        <FleetStrip />
+        {focused ? (
+          <FocusView
+            host={focused}
+            onRename={() => setDialog({ kind: 'rename', peer: focused.peer })}
+            onRemove={removeSelected}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <span className="plate text-plate">Select a host to inspect it</span>
+          </div>
+        )}
+        <PeerDialog mode={dialog} onClose={() => setDialog(null)} />
+        <CommandPalette />
+      </div>
+    </ToastProvider>
   )
 }

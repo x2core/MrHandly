@@ -17,12 +17,15 @@ export function TopBar({ onAdd, mock }: Props) {
           <span className="plate rounded-sm bg-signal/10 px-1.5 py-0.5 text-signal">demo data</span>
         )}
       </div>
-      <button
-        onClick={onAdd}
-        className="border border-signal bg-signal/10 px-3 py-1.5 font-plate text-xs uppercase tracking-wider text-signal transition-colors duration-led hover:bg-signal/20"
-      >
-        + Add peer
-      </button>
+      <div className="flex items-center gap-3">
+        <span className="plate flex items-center gap-1 border border-rule px-2 py-1 text-plate">⌘K palette</span>
+        <button
+          onClick={onAdd}
+          className="border border-signal bg-signal/10 px-3 py-1.5 font-plate text-xs uppercase tracking-wider text-signal transition-colors duration-led hover:bg-signal/20"
+        >
+          + Add peer
+        </button>
+      </div>
     </header>
   )
 }
