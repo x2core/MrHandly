@@ -1,0 +1,52 @@
+/* Fonts and uPlot styles are bundled locally — the desktop app makes no
+   external network requests for assets. */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans-condensed/500.css';
+@import '@fontsource/ibm-plex-sans-condensed/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import 'uplot/dist/uPlot.min.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  @apply bg-panel text-readout font-sans;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+@layer components {
+  /* A silkscreen label plate: condensed, uppercase, wide tracking. */
+  .plate {
+    @apply font-plate uppercase text-plate;
+  }
+
+  /* Any number, name or id: tabular mono so figures never jitter at 1 Hz. */
+  .readout {
+    @apply font-mono;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Respect reduced motion: kill the only animation we have (LED crossfade). */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

@@ -21,6 +21,8 @@ oikos-agent-*
 
 # Desktop (Tauri / Rust) build output
 /desktop/src-tauri/target/
+/desktop/src-tauri/gen/
+/desktop/dist/
 **/target/
 
 # Node / TypeScript

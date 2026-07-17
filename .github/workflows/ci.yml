@@ -73,27 +73,75 @@ jobs:
       - name: lint (eslint)
         run: pnpm lint
 
-  # The desktop app (Tauri: Rust core + React) is scaffolded in M4. Its lint
-  # gate — cargo clippy + tsc + eslint — is wired here as soon as
-  # desktop/src-tauri/Cargo.toml exists, so a half-built desktop can never land
-  # unchecked. Until then this job is a no-op rather than a fake green.
-  desktop:
-    name: desktop (rust + ts)
+  # desktop/core — the webkit-free Rust crate (peers, agent HTTP/SSE client).
+  # A real gate: it builds and tests anywhere, no GUI toolkit needed.
+  desktop-core:
+    name: desktop core (rust)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop/core
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
 
-      - name: detect desktop scaffold
-        id: detect
+  # desktop UI — Vite/React frontend. A real gate: typecheck, lint, build.
+  desktop-ui:
+    name: desktop ui (ts)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: desktop/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+
+  # desktop shell — the thin Tauri glue. It needs the system webkit toolkit,
+  # which the bare CI image and the dev sandbox lack, so this is advisory: it
+  # runs clippy when the deps install cleanly but does not block the gate. The
+  # shell's real verification is a local `pnpm tauri dev` (docs/ROADMAP.md M4).
+  desktop-tauri:
+    name: desktop shell (tauri, advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: system deps (tauri v2)
         run: |
-          if [ -f desktop/src-tauri/Cargo.toml ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::desktop app not scaffolded yet (arrives in M4) — skipping clippy/tsc/eslint"
-          fi
-
-      - name: cargo clippy
-        if: steps.detect.outputs.present == 'true'
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libxdo-dev libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: build frontend (tauri-build reads ../dist)
+        working-directory: desktop
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: cargo clippy (src-tauri)
         working-directory: desktop/src-tauri
         run: cargo clippy --all-targets -- -D warnings

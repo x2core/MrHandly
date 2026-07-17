@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capability: invoke the app's own commands and receive its events.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

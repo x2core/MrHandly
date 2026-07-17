@@ -1,0 +1,33 @@
+[package]
+name = "oikos-desktop"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# The Tauri shell. It is deliberately thin: it owns no business logic, only the
+# glue that turns oikos-core (peers, HTTP/SSE client) into Tauri commands and
+# fans agent events out to the webview (CLAUDE.md §3). This crate needs the
+# system webkit toolkit, so it builds locally / in CI with those libs installed
+# — oikos-core carries everything testable in a bare sandbox.
+
+# Detach from any parent workspace so `cargo test` on oikos-core never pulls the
+# GUI toolchain.
+[workspace]
+
+[lib]
+name = "oikos_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+futures-util = "0.3"
+oikos-core = { path = "../core" }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

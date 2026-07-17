@@ -45,7 +45,17 @@ decisions, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the milestone plan.
 
 ## Status
 
-**M3 — Docker (in progress).** A Docker Engine client over the raw unix socket
+**M4 — Desktop shell (in progress).** First pixels. A Tauri app (Rust core +
+React/TS) with the signature **Fleet Strip**: one fixed-height row per host,
+always visible — name plate, uPlot sparklines (CPU/RAM/net), LED cluster — over
+a rack-mounted-instrument design system (warm graphite, IBM Plex, `tabular-nums`,
+colour-carries-state). Click a host to focus it in a Performance view; offline
+peers degrade to a labelled disconnected plate, never a blank panel. The
+webkit-free `desktop/core` crate (peers.toml + agent HTTP/SSE client) is unit
+tested; the React UI builds, typechecks, lints, and is screenshot-verified. See
+[`desktop/`](./desktop/).
+
+**M3 — Docker (done).** A Docker Engine client over the raw unix socket
 using plain `net/http` — no Docker SDK, API version pinned in the path. Serves
 `GET /v1/docker/containers`, `GET /v1/docker/containers/:id`,
 `POST /v1/docker/containers/:id/{start,stop,restart}`,
