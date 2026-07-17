@@ -53,3 +53,50 @@ export interface MetricsEvent {
   address: string
   metrics: Metrics
 }
+
+// M5 read surfaces.
+export interface Service {
+  name: string
+  description: string
+  load_state: string
+  active_state: string
+  sub_state: string
+  writable: boolean
+}
+
+export interface Process {
+  pid: number
+  ppid: number
+  name: string
+  state: string
+  cpu: number
+  rss: number
+  threads: number
+}
+
+export interface Container {
+  id: string
+  name: string
+  image: string
+  state: string
+  status: string
+  created: number
+  writable: boolean
+}
+
+export interface Image {
+  id: string
+  tags: string[]
+  size: number
+  created: number
+}
+
+export interface LogRecord {
+  /** unix ms, or 0 if unknown */
+  timestamp: number
+  message: string
+  /** journald priority 0..7, or -1 for container logs */
+  priority: number
+  /** stdout|stderr for container logs, else the unit */
+  source: string
+}

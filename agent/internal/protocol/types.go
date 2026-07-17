@@ -62,13 +62,13 @@ type Capabilities struct {
 // Metrics is a single live projection of the host, emitted by GET /v1/metrics
 // and each frame of GET /v1/metrics/stream.
 type Metrics struct {
-	Timestamp     int64                     `json:"timestamp"` // unix milliseconds
-	CPU           CPUMetrics                `json:"cpu"`
-	Memory        MemoryMetrics             `json:"memory"`
-	Load          LoadMetrics               `json:"load"`
-	UptimeSeconds float64                   `json:"uptime_seconds"`
-	Network       map[string]NetDevMetrics  `json:"network"`
-	Disk          map[string]DiskMetrics    `json:"disk"`
+	Timestamp     int64                    `json:"timestamp"` // unix milliseconds
+	CPU           CPUMetrics               `json:"cpu"`
+	Memory        MemoryMetrics            `json:"memory"`
+	Load          LoadMetrics              `json:"load"`
+	UptimeSeconds float64                  `json:"uptime_seconds"`
+	Network       map[string]NetDevMetrics `json:"network"`
+	Disk          map[string]DiskMetrics   `json:"disk"`
 }
 
 type CPUMetrics struct {
@@ -156,4 +156,15 @@ type ContainerLog struct {
 	Stream    string `json:"stream"` // stdout | stderr
 	Timestamp int64  `json:"timestamp"`
 	Message   string `json:"message"`
+}
+
+// Process is one entry of the process table (M5), from GET /v1/processes.
+type Process struct {
+	PID     int     `json:"pid"`
+	PPID    int     `json:"ppid"`
+	Name    string  `json:"name"`  // command line, or the kernel comm
+	State   string  `json:"state"` // R, S, D, Z, …
+	CPU     float64 `json:"cpu"`   // busy fraction over the interval, 0..1
+	RSS     uint64  `json:"rss"`   // resident memory, bytes
+	Threads int     `json:"threads"`
 }

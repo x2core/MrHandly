@@ -3,8 +3,9 @@
 //! one-shot info/metrics and the metrics SSE stream.
 
 use crate::error::Result;
-use crate::types::{Info, Metrics};
+use crate::types::{Container, ContainerLog, Image, Info, LogLine, Metrics, Process, Service};
 use futures_util::{Stream, StreamExt};
+use serde::de::DeserializeOwned;
 use std::time::Duration;
 
 /// An HTTP/SSE client for one agent.
@@ -58,12 +59,97 @@ impl AgentClient {
         self.info().await.is_ok()
     }
 
-    /// Open the metrics SSE stream, yielding one item per frame. The stream ends
-    /// when the connection closes; the caller (a Tauri task) drops it to
-    /// unsubscribe, which the agent's subscription-driven sampler notices.
+    async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let v = self
+            .http
+            .get(format!("{}{}", self.base, path))
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<T>()
+            .await?;
+        Ok(v)
+    }
+
+    async fn post(&self, path: &str) -> Result<()> {
+        self.http
+            .post(format!("{}{}", self.base, path))
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(())
+    }
+
+    /// One-shot reads for the table views (M5).
+    pub async fn services(&self) -> Result<Vec<Service>> {
+        self.get("/v1/services").await
+    }
+    pub async fn processes(&self) -> Result<Vec<Process>> {
+        self.get("/v1/processes").await
+    }
+    pub async fn containers(&self) -> Result<Vec<Container>> {
+        self.get("/v1/docker/containers").await
+    }
+    pub async fn images(&self) -> Result<Vec<Image>> {
+        self.get("/v1/docker/images").await
+    }
+
+    /// Write actions (allowlist enforced by the agent; a 403 surfaces as Err).
+    pub async fn service_action(&self, unit: &str, action: &str) -> Result<()> {
+        self.post(&format!("/v1/services/{unit}/{action}")).await
+    }
+    pub async fn container_action(&self, id: &str, action: &str) -> Result<()> {
+        self.post(&format!("/v1/docker/containers/{id}/{action}"))
+            .await
+    }
+
+    /// The metrics SSE stream. Dropping the stream unsubscribes, which the
+    /// agent's subscription-driven sampler notices and stops sampling.
     pub fn metrics_stream(&self) -> impl Stream<Item = Result<Metrics>> + 'static {
+        self.sse("/v1/metrics/stream")
+    }
+
+    /// The process-table SSE stream (2s, subscription-driven on the agent).
+    pub fn processes_stream(&self) -> impl Stream<Item = Result<Vec<Process>>> + 'static {
+        self.sse("/v1/processes/stream")
+    }
+
+    /// The services SSE stream (event-driven on the agent).
+    pub fn services_stream(&self) -> impl Stream<Item = Result<Vec<Service>>> + 'static {
+        self.sse("/v1/services/stream")
+    }
+
+    /// Stream journald logs for a unit.
+    pub fn service_logs(
+        &self,
+        unit: &str,
+        follow: bool,
+    ) -> impl Stream<Item = Result<LogLine>> + 'static {
+        self.sse(&format!(
+            "/v1/services/{unit}/logs?follow={}",
+            if follow { 1 } else { 0 }
+        ))
+    }
+
+    /// Stream container logs.
+    pub fn container_logs(
+        &self,
+        id: &str,
+        follow: bool,
+    ) -> impl Stream<Item = Result<ContainerLog>> + 'static {
+        self.sse(&format!(
+            "/v1/docker/containers/{id}/logs?follow={}",
+            if follow { 1 } else { 0 }
+        ))
+    }
+
+    /// Generic SSE consumer: GET `path`, yield one deserialized `T` per frame.
+    fn sse<T: DeserializeOwned + 'static>(
+        &self,
+        path: &str,
+    ) -> impl Stream<Item = Result<T>> + 'static {
         let http = self.http.clone();
-        let url = format!("{}/v1/metrics/stream", self.base);
+        let url = format!("{}{}", self.base, path);
         async_stream::try_stream! {
             let resp = http.get(url).send().await?.error_for_status()?;
             let mut bytes = resp.bytes_stream();
@@ -72,8 +158,8 @@ impl AgentClient {
                 buf.extend_from_slice(&chunk?);
                 while let Some(pos) = find_subsequence(&buf, b"\n\n") {
                     let frame: Vec<u8> = buf.drain(..pos + 2).collect();
-                    if let Some(m) = parse_sse_metrics(&frame)? {
-                        yield m;
+                    if let Some(v) = parse_sse::<T>(&frame)? {
+                        yield v;
                     }
                 }
             }
@@ -81,12 +167,12 @@ impl AgentClient {
     }
 }
 
-/// Extract a `Metrics` from one SSE frame (a `data: {json}` line).
-fn parse_sse_metrics(frame: &[u8]) -> Result<Option<Metrics>> {
+/// Extract a `T` from one SSE frame (a `data: {json}` line).
+fn parse_sse<T: DeserializeOwned>(frame: &[u8]) -> Result<Option<T>> {
     let text = String::from_utf8_lossy(frame);
     for line in text.lines() {
         if let Some(json) = line.strip_prefix("data: ") {
-            return Ok(Some(serde_json::from_str::<Metrics>(json)?));
+            return Ok(Some(serde_json::from_str::<T>(json)?));
         }
     }
     Ok(None)
@@ -178,6 +264,22 @@ mod tests {
 
     #[test]
     fn parse_sse_ignores_non_data_lines() {
-        assert!(parse_sse_metrics(b": comment\n\n").unwrap().is_none());
+        assert!(parse_sse::<Metrics>(b": comment\n\n").unwrap().is_none());
+    }
+
+    #[test]
+    fn parses_services_json() {
+        let json = r#"[{"name":"nginx.service","description":"web","load_state":"loaded","active_state":"active","sub_state":"running","writable":true}]"#;
+        let svcs: Vec<Service> = serde_json::from_str(json).unwrap();
+        assert_eq!(svcs[0].name, "nginx.service");
+        assert!(svcs[0].writable);
+    }
+
+    #[test]
+    fn parses_process_json() {
+        let json = r#"{"pid":101,"ppid":1,"name":"nginx","state":"S","cpu":0.25,"rss":8192000,"threads":4}"#;
+        let p: Process = serde_json::from_str(json).unwrap();
+        assert_eq!(p.pid, 101);
+        assert_eq!(p.threads, 4);
     }
 }

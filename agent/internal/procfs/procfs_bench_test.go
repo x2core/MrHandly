@@ -20,6 +20,21 @@ func BenchmarkStat(b *testing.B) {
 	}
 }
 
+// BenchmarkProcesses guards the expensive process-table read (~pids × stat).
+func BenchmarkProcesses(b *testing.B) {
+	r := New(fixtureRoot)
+	if _, err := r.Processes(); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := r.Processes(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 // BenchmarkParseStat isolates the parser from file I/O.
 func BenchmarkParseStat(b *testing.B) {
 	r := New(fixtureRoot)

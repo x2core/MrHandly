@@ -251,8 +251,8 @@ func (r *Reader) NetDev() (map[string]NetDev, error) {
 }
 
 func parseNetDev(buf []byte, out map[string]NetDev) {
-	_, rest := nextLine(buf)  // "Inter-|   Receive …" header
-	_, rest = nextLine(rest)  // " face |bytes packets …" header
+	_, rest := nextLine(buf) // "Inter-|   Receive …" header
+	_, rest = nextLine(rest) // " face |bytes packets …" header
 	buf = rest
 	for len(buf) > 0 {
 		var l []byte

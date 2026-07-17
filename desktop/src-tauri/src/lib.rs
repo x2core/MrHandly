@@ -30,6 +30,23 @@ struct AppState {
     path: PathBuf,
     peers: Mutex<PeersFile>,
     tasks: Mutex<HashMap<String, JoinHandle<()>>>,
+    // Per-view stream tasks (processes/services/logs), keyed by "address|view",
+    // started on tab mount and aborted on unmount — this is what makes the
+    // agent's subscription-driven sampling pay off (CLAUDE.md §8).
+    views: Mutex<HashMap<String, JoinHandle<()>>>,
+}
+
+impl AppState {
+    /// Build a client for a known peer address, honouring its configured port.
+    fn client_for(&self, address: &str) -> Option<AgentClient> {
+        self.peers
+            .lock()
+            .unwrap()
+            .peers
+            .iter()
+            .find(|p| p.address == address)
+            .map(|p| AgentClient::new(p.base_url()))
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -96,6 +113,141 @@ fn rename_peer(
     }
     emit_peers(&app, &state.peers);
     Ok(())
+}
+
+// --- M5: table views + logs ---------------------------------------------
+
+#[derive(Clone, Serialize)]
+struct ViewEvent<T: Serialize + Clone> {
+    address: String,
+    items: T,
+}
+
+#[derive(Clone, Serialize)]
+struct LogEvent {
+    address: String,
+    line: serde_json::Value,
+}
+
+/// Subscribe the given view (processes | services) for a peer. Emits
+/// `view:<kind>` events with the latest snapshot until unsubscribed.
+#[tauri::command]
+fn subscribe_view(app: AppHandle, state: State<AppState>, address: String, kind: String) {
+    let Some(client) = state.client_for(&address) else { return };
+    let key = format!("{address}|{kind}");
+    let event = format!("view:{kind}");
+    let addr = address.clone();
+    let handle = tauri::async_runtime::spawn(async move {
+        match kind.as_str() {
+            "processes" => {
+                let s = client.processes_stream();
+                futures_util::pin_mut!(s);
+                while let Some(Ok(items)) = s.next().await {
+                    let _ = app.emit(&event, ViewEvent { address: addr.clone(), items });
+                }
+            }
+            "services" => {
+                let s = client.services_stream();
+                futures_util::pin_mut!(s);
+                while let Some(Ok(items)) = s.next().await {
+                    let _ = app.emit(&event, ViewEvent { address: addr.clone(), items });
+                }
+            }
+            _ => {}
+        }
+    });
+    if let Some(old) = state.views.lock().unwrap().insert(key, handle) {
+        old.abort();
+    }
+}
+
+#[tauri::command]
+fn unsubscribe_view(state: State<AppState>, address: String, kind: String) {
+    if let Some(h) = state.views.lock().unwrap().remove(&format!("{address}|{kind}")) {
+        h.abort();
+    }
+}
+
+#[tauri::command]
+async fn fetch_containers(state: State<'_, AppState>, address: String) -> Result<serde_json::Value, String> {
+    let client = state.client_for(&address).ok_or("unknown peer")?;
+    let c = client.containers().await.map_err(stringify)?;
+    serde_json::to_value(c).map_err(stringify)
+}
+
+#[tauri::command]
+async fn fetch_images(state: State<'_, AppState>, address: String) -> Result<serde_json::Value, String> {
+    let client = state.client_for(&address).ok_or("unknown peer")?;
+    let i = client.images().await.map_err(stringify)?;
+    serde_json::to_value(i).map_err(stringify)
+}
+
+#[tauri::command]
+async fn service_action(
+    state: State<'_, AppState>,
+    address: String,
+    unit: String,
+    action: String,
+) -> Result<(), String> {
+    let client = state.client_for(&address).ok_or("unknown peer")?;
+    client.service_action(&unit, &action).await.map_err(stringify)
+}
+
+#[tauri::command]
+async fn container_action(
+    state: State<'_, AppState>,
+    address: String,
+    id: String,
+    action: String,
+) -> Result<(), String> {
+    let client = state.client_for(&address).ok_or("unknown peer")?;
+    client.container_action(&id, &action).await.map_err(stringify)
+}
+
+/// Stream logs for a unit (kind="service") or container (kind="container").
+/// Emits `peer:log` events until `unsubscribe_logs`.
+#[tauri::command]
+fn subscribe_logs(
+    app: AppHandle,
+    state: State<AppState>,
+    address: String,
+    kind: String,
+    target: String,
+) {
+    let Some(client) = state.client_for(&address) else { return };
+    let key = format!("{address}|logs");
+    let addr = address.clone();
+    let handle = tauri::async_runtime::spawn(async move {
+        match kind.as_str() {
+            "service" => {
+                let s = client.service_logs(&target, true);
+                futures_util::pin_mut!(s);
+                while let Some(Ok(line)) = s.next().await {
+                    let v = serde_json::to_value(line).unwrap_or_default();
+                    let _ = app.emit("peer:log", LogEvent { address: addr.clone(), line: v });
+                }
+            }
+            "container" => {
+                let s = client.container_logs(&target, true);
+                futures_util::pin_mut!(s);
+                while let Some(Ok(line)) = s.next().await {
+                    let v = serde_json::to_value(line).unwrap_or_default();
+                    let _ = app.emit("peer:log", LogEvent { address: addr.clone(), line: v });
+                }
+            }
+            _ => {}
+        }
+    });
+    if let Some(old) = state.views.lock().unwrap().insert(key, handle) {
+        old.abort();
+    }
+}
+
+#[tauri::command]
+fn unsubscribe_logs(state: State<AppState>, address: String) {
+    if let Some(h) = state.views.lock().unwrap().remove(&format!("{address}|logs")) {
+        h.abort();
+    }
 }
 
 fn stringify<E: std::fmt::Display>(e: E) -> String {
@@ -180,6 +332,7 @@ pub fn run() {
                 path,
                 peers: Mutex::new(loaded.clone()),
                 tasks: Mutex::new(HashMap::new()),
+                views: Mutex::new(HashMap::new()),
             });
 
             let state = app.state::<AppState>();
@@ -193,7 +346,15 @@ pub fn run() {
             list_peers,
             add_peer,
             remove_peer,
-            rename_peer
+            rename_peer,
+            subscribe_view,
+            unsubscribe_view,
+            fetch_containers,
+            fetch_images,
+            service_action,
+            container_action,
+            subscribe_logs,
+            unsubscribe_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running Oikos");

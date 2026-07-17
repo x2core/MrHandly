@@ -59,15 +59,27 @@ peers = ["10.44.0.1", "127.0.0.1", "::1"]
 		return metrics.NewCollector(fixtureRoot, time.Now).Collect()
 	}
 
+	procCollector := metrics.NewProcessCollector(fixtureRoot)
+	procSrc := sampler.New(sampler.Config[[]protocol.Process]{
+		Interval: 5 * time.Millisecond,
+		Sample:   procCollector.Collect,
+		Prime:    procCollector.Reset,
+	})
+	procOneShot := func() ([]protocol.Process, error) {
+		return metrics.NewProcessCollector(fixtureRoot).Collect()
+	}
+
 	var auditBuf bytes.Buffer
 	s := New(Deps{
-		Config:      cfg,
-		Fingerprint: fp,
-		Version:     "v1.0.0",
-		Commit:      "cafe",
-		Metrics:     src,
-		OneShot:     oneShot,
-		Audit:       audit.New(&auditBuf),
+		Config:           cfg,
+		Fingerprint:      fp,
+		Version:          "v1.0.0",
+		Commit:           "cafe",
+		Metrics:          src,
+		OneShot:          oneShot,
+		Audit:            audit.New(&auditBuf),
+		Processes:        procSrc,
+		ProcessesOneShot: procOneShot,
 	})
 	return s, src, &auditBuf
 }

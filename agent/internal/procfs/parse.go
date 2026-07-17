@@ -20,13 +20,14 @@ func nextLine(b []byte) (line, rest []byte) {
 // nextField returns the next whitespace-delimited field of b and the remainder
 // following it. Leading spaces and tabs are skipped.
 func nextField(b []byte) (field, rest []byte) {
+	isSep := func(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
 	i := 0
-	for i < len(b) && (b[i] == ' ' || b[i] == '\t') {
+	for i < len(b) && isSep(b[i]) {
 		i++
 	}
 	b = b[i:]
 	j := 0
-	for j < len(b) && b[j] != ' ' && b[j] != '\t' {
+	for j < len(b) && !isSep(b[j]) {
 		j++
 	}
 	return b[:j], b[j:]

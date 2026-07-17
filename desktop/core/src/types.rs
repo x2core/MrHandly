@@ -95,3 +95,60 @@ pub struct ApiError {
     pub code: String,
     pub message: String,
 }
+
+// M5 read surfaces: services, processes, docker, logs.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Service {
+    pub name: String,
+    pub description: String,
+    pub load_state: String,
+    pub active_state: String,
+    pub sub_state: String,
+    pub writable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Process {
+    pub pid: i32,
+    pub ppid: i32,
+    pub name: String,
+    pub state: String,
+    pub cpu: f64,
+    pub rss: u64,
+    pub threads: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Container {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    pub state: String,
+    pub status: String,
+    pub created: i64,
+    pub writable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Image {
+    pub id: String,
+    pub tags: Vec<String>,
+    pub size: i64,
+    pub created: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogLine {
+    pub timestamp: i64,
+    pub priority: i32,
+    pub message: String,
+    pub unit: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContainerLog {
+    pub stream: String,
+    pub timestamp: i64,
+    pub message: String,
+}

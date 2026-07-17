@@ -6,7 +6,20 @@
 // The webview NEVER opens a socket itself — either the Rust core does, or the
 // mock fabricates data (CLAUDE.md §3).
 
-import type { MetricsEvent, Metrics, Peer, StatusEvent } from './types'
+import type {
+  Container,
+  Image,
+  LogRecord,
+  MetricsEvent,
+  Metrics,
+  Peer,
+  Process,
+  Service,
+  StatusEvent,
+} from './types'
+
+export type ViewKind = 'processes' | 'services'
+export type LogKind = 'service' | 'container'
 
 export interface Bridge {
   listPeers(): Promise<Peer[]>
@@ -16,6 +29,15 @@ export interface Bridge {
   onPeers(cb: (peers: Peer[]) => void): () => void
   onStatus(cb: (e: StatusEvent) => void): () => void
   onMetrics(cb: (e: MetricsEvent) => void): () => void
+
+  // M5 views.
+  fetchContainers(address: string): Promise<Container[]>
+  fetchImages(address: string): Promise<Image[]>
+  serviceAction(address: string, unit: string, action: string): Promise<void>
+  containerAction(address: string, id: string, action: string): Promise<void>
+  subscribeProcesses(address: string, cb: (items: Process[]) => void): () => void
+  subscribeServices(address: string, cb: (items: Service[]) => void): () => void
+  subscribeLogs(address: string, kind: LogKind, target: string, cb: (line: LogRecord) => void): () => void
 }
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -51,6 +73,67 @@ function tauriBridge(): Bridge {
     onPeers: (cb) => listen<Peer[]>('peers:changed', cb),
     onStatus: (cb) => listen<StatusEvent>('peer:status', cb),
     onMetrics: (cb) => listen<MetricsEvent>('peer:metrics', cb),
+
+    async fetchContainers(address) {
+      return (await core()).invoke<Container[]>('fetch_containers', { address })
+    },
+    async fetchImages(address) {
+      return (await core()).invoke<Image[]>('fetch_images', { address })
+    },
+    async serviceAction(address, unit, action) {
+      await (await core()).invoke('service_action', { address, unit, action })
+    },
+    async containerAction(address, id, action) {
+      await (await core()).invoke('container_action', { address, id, action })
+    },
+    subscribeProcesses(address, cb) {
+      void core().then(({ invoke }) => invoke('subscribe_view', { address, kind: 'processes' }))
+      const off = listen<{ address: string; items: Process[] }>('view:processes', (e) => {
+        if (e.address === address) cb(e.items)
+      })
+      return () => {
+        off()
+        void core().then(({ invoke }) => invoke('unsubscribe_view', { address, kind: 'processes' }))
+      }
+    },
+    subscribeServices(address, cb) {
+      void core().then(({ invoke }) => invoke('subscribe_view', { address, kind: 'services' }))
+      const off = listen<{ address: string; items: Service[] }>('view:services', (e) => {
+        if (e.address === address) cb(e.items)
+      })
+      return () => {
+        off()
+        void core().then(({ invoke }) => invoke('unsubscribe_view', { address, kind: 'services' }))
+      }
+    },
+    subscribeLogs(address, kind, target, cb) {
+      void core().then(({ invoke }) => invoke('subscribe_logs', { address, kind, target }))
+      const off = listen<{ address: string; line: Record<string, unknown> }>('peer:log', (e) => {
+        if (e.address === address) cb(mapLog(e.line))
+      })
+      return () => {
+        off()
+        void core().then(({ invoke }) => invoke('unsubscribe_logs', { address }))
+      }
+    },
+  }
+}
+
+// mapLog normalises a service LogLine or container ContainerLog into LogRecord.
+function mapLog(raw: Record<string, unknown>): LogRecord {
+  if ('stream' in raw) {
+    return {
+      timestamp: Number(raw.timestamp ?? 0),
+      message: String(raw.message ?? ''),
+      priority: -1,
+      source: String(raw.stream ?? 'stdout'),
+    }
+  }
+  return {
+    timestamp: Number(raw.timestamp ?? 0),
+    message: String(raw.message ?? ''),
+    priority: Number(raw.priority ?? 6),
+    source: String(raw.unit ?? ''),
   }
 }
 
@@ -167,7 +250,114 @@ function mockBridge(): Bridge {
       metricsCbs.add(cb)
       return () => metricsCbs.delete(cb)
     },
+
+    async fetchContainers() {
+      return mockContainers()
+    },
+    async fetchImages() {
+      return mockImages()
+    },
+    async serviceAction() {
+      /* no-op in demo */
+    },
+    async containerAction() {
+      /* no-op in demo */
+    },
+    subscribeProcesses(_address, cb) {
+      const tick = () => cb(mockProcesses())
+      tick()
+      const h = setInterval(tick, 2000)
+      return () => clearInterval(h)
+    },
+    subscribeServices(_address, cb) {
+      cb(mockServices())
+      const h = setInterval(() => cb(mockServices()), 3000)
+      return () => clearInterval(h)
+    },
+    subscribeLogs(_address, kind, target, cb) {
+      let n = 0
+      const h = setInterval(() => {
+        n++
+        cb({
+          timestamp: Date.now(),
+          message:
+            kind === 'container'
+              ? `${target.slice(0, 8)} handled request ${n} in ${(2 + Math.random() * 40).toFixed(0)}ms`
+              : `${target}: worker ${n % 4} processed job ${n}`,
+          priority: kind === 'container' ? -1 : n % 11 === 0 ? 3 : 6,
+          source: kind === 'container' ? (n % 5 === 0 ? 'stderr' : 'stdout') : target,
+        })
+      }, 700)
+      return () => clearInterval(h)
+    },
   }
+}
+
+// --- mock M5 data ---------------------------------------------------------
+
+const PROC_NAMES = [
+  '/usr/sbin/nginx: worker',
+  'postgres: checkpointer',
+  '/usr/bin/dockerd',
+  'systemd --user',
+  '/usr/sbin/sshd -D',
+  'node /srv/app/index.js',
+  '/usr/bin/containerd',
+  'redis-server *:6379',
+  '/lib/systemd/systemd-journald',
+  'python3 /opt/worker.py',
+]
+
+function mockProcesses(): Process[] {
+  const procs: Process[] = []
+  for (let i = 0; i < 42; i++) {
+    procs.push({
+      pid: 100 + i * 7,
+      ppid: i < 3 ? 1 : 100 + Math.floor(Math.random() * i) * 7,
+      name: PROC_NAMES[i % PROC_NAMES.length]!,
+      state: Math.random() > 0.7 ? 'S' : Math.random() > 0.5 ? 'R' : 'S',
+      cpu: Math.max(0, Math.random() ** 3),
+      rss: Math.floor((5 + Math.random() * 500) * 1024 * 1024),
+      threads: 1 + Math.floor(Math.random() * 12),
+    })
+  }
+  return procs.sort((a, b) => b.cpu - a.cpu)
+}
+
+function mockServices(): Service[] {
+  const base = [
+    ['nginx.service', 'A high performance web server', 'active', 'running', true],
+    ['ssh.service', 'OpenBSD Secure Shell server', 'active', 'running', false],
+    ['docker.service', 'Docker Application Container Engine', 'active', 'running', true],
+    ['postgresql.service', 'PostgreSQL RDBMS', 'active', 'running', false],
+    ['cron.service', 'Regular background program processing', 'active', 'running', false],
+    ['fail2ban.service', 'Fail2Ban Service', Math.random() > 0.85 ? 'failed' : 'active', 'running', false],
+  ] as const
+  return base.map(([name, description, active_state, sub_state, writable]) => ({
+    name,
+    description,
+    load_state: 'loaded',
+    active_state,
+    sub_state: active_state === 'failed' ? 'failed' : sub_state,
+    writable,
+  }))
+}
+
+function mockContainers(): Container[] {
+  return [
+    { id: 'abc123def456', name: 'web', image: 'nginx:latest', state: 'running', status: 'Up 3 hours', created: 1700000000, writable: true },
+    { id: '789ghi012jkl', name: 'db', image: 'postgres:16', state: 'running', status: 'Up 3 hours', created: 1699990000, writable: true },
+    { id: 'mno345pqr678', name: 'cache', image: 'redis:7', state: 'exited', status: 'Exited (0) 10 minutes ago', created: 1699980000, writable: true },
+  ]
+}
+
+function mockImages(): Image[] {
+  return [
+    { id: 'sha256:aaaa', tags: ['nginx:latest'], size: 142_000_000, created: 1699000000 },
+    { id: 'sha256:bbbb', tags: ['postgres:16'], size: 379_000_000, created: 1698000000 },
+    { id: 'sha256:cccc', tags: ['redis:7'], size: 41_000_000, created: 1697000000 },
+    { id: 'sha256:dddd', tags: [], size: 8_000_000, created: 1696000000 },
+  ]
 }
 
 function clamp01(v: number): number {

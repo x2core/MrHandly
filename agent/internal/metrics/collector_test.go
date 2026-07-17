@@ -66,11 +66,11 @@ func writeProcTree(t *testing.T, statBody string) string {
 	t.Helper()
 	root := t.TempDir()
 	files := map[string]string{
-		"proc/stat":     statBody,
-		"proc/meminfo":  "MemTotal: 1000 kB\nMemFree: 400 kB\nMemAvailable: 600 kB\n",
-		"proc/loadavg":  "0.10 0.20 0.30 1/100 42\n",
-		"proc/uptime":   "1000.00 900.00\n",
-		"proc/net/dev":  "h1\nh2\n  eth0: 1 2 0 0 0 0 0 0 3 4 0 0 0 0 0 0\n",
+		"proc/stat":      statBody,
+		"proc/meminfo":   "MemTotal: 1000 kB\nMemFree: 400 kB\nMemAvailable: 600 kB\n",
+		"proc/loadavg":   "0.10 0.20 0.30 1/100 42\n",
+		"proc/uptime":    "1000.00 900.00\n",
+		"proc/net/dev":   "h1\nh2\n  eth0: 1 2 0 0 0 0 0 0 3 4 0 0 0 0 0 0\n",
 		"proc/diskstats": "   8 0 sda 1 0 2 0 3 0 4 0 0 0 0\n",
 	}
 	for name, body := range files {

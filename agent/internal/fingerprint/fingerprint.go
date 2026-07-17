@@ -40,8 +40,8 @@ type Options struct {
 // Fingerprint is the cached host identity plus live capability probes.
 type Fingerprint struct {
 	host    protocol.HostInfo
-	systemd bool             // detected once at start
-	docker  func() bool      // re-probed lazily
+	systemd bool        // detected once at start
+	docker  func() bool // re-probed lazily
 }
 
 // Detect reads host identity and evaluates the systemd capability once.

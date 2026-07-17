@@ -39,12 +39,12 @@ func cfg(t *testing.T, subnet string) *Config {
 
 func TestResolveBindAddr(t *testing.T) {
 	tests := []struct {
-		name     string
-		subnet   string
-		addrs    []string
+		name       string
+		subnet     string
+		addrs      []string
 		resolveErr error
-		wantAddr string // empty => expect error
-		wantErr  string // substring the error must contain
+		wantAddr   string // empty => expect error
+		wantErr    string // substring the error must contain
 	}{
 		{
 			name:     "valid in-subnet address",
@@ -53,9 +53,9 @@ func TestResolveBindAddr(t *testing.T) {
 			wantAddr: "10.44.0.5",
 		},
 		{
-			name:    "picks in-subnet from several",
-			subnet:  "10.44.0.0/24",
-			addrs:   []string{"192.168.1.10/24", "10.44.0.7/24", "172.16.0.1/16"},
+			name:     "picks in-subnet from several",
+			subnet:   "10.44.0.0/24",
+			addrs:    []string{"192.168.1.10/24", "10.44.0.7/24", "172.16.0.1/16"},
 			wantAddr: "10.44.0.7",
 		},
 		{

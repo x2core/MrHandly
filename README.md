@@ -45,7 +45,19 @@ decisions, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the milestone plan.
 
 ## Status
 
-**M4 — Desktop shell (in progress).** First pixels. A Tauri app (Rust core +
+**M5 — Services / Processes / Docker views (in progress).** The focus pane is
+now tabbed — Performance · Processes · Services · Docker · Logs — over one
+TanStack Table + Virtual primitive configured three ways. **Processes** is the
+Task Manager panel (virtualized, sort by CPU/RSS, subscribes on mount /
+unsubscribes on unmount); **Services** shows state LEDs with allowlisted actions
+enabled and the rest visibly disabled; **Docker** lists containers + images
+where present; the **Log viewer** streams journald and container logs
+(virtualized, follow-tail with break-on-scroll, level filter). New agent surface:
+`GET /v1/processes` + `/v1/processes/stream` (process table at 2s, only while
+watched). Verified: agent tests/bench, `desktop/core` `cargo test`, UI
+build/lint/typecheck, and screenshots of every tab.
+
+**M4 — Desktop shell (done).** First pixels. A Tauri app (Rust core +
 React/TS) with the signature **Fleet Strip**: one fixed-height row per host,
 always visible — name plate, uPlot sparklines (CPU/RAM/net), LED cluster — over
 a rack-mounted-instrument design system (warm graphite, IBM Plex, `tabular-nums`,

@@ -35,6 +35,12 @@ type Deps struct {
 	OneShot func() (protocol.Metrics, error)
 	Audit   *audit.Logger
 
+	// Processes is the subscription-driven source backing the process stream.
+	// Sampled at 2s and only while a client is watching (CLAUDE.md §8).
+	Processes *sampler.Source[[]protocol.Process]
+	// ProcessesOneShot returns a single process-table snapshot.
+	ProcessesOneShot func() ([]protocol.Process, error)
+
 	// Services projects systemd units. Nil when systemd is unavailable on the
 	// host, in which case every /v1/services route returns systemd_unavailable.
 	Services *systemd.Manager
@@ -63,6 +69,8 @@ func New(deps Deps) *Server {
 	s.mux.HandleFunc("GET /v1/info", s.handleInfo)
 	s.mux.HandleFunc("GET /v1/metrics", s.handleMetrics)
 	s.mux.HandleFunc("GET /v1/metrics/stream", s.handleMetricsStream)
+	s.mux.HandleFunc("GET /v1/processes", s.handleProcesses)
+	s.mux.HandleFunc("GET /v1/processes/stream", s.handleProcessesStream)
 	s.mux.HandleFunc("GET /v1/services", s.handleServices)
 	s.mux.HandleFunc("GET /v1/services/stream", s.handleServicesStream)
 	s.mux.HandleFunc("GET /v1/services/{unit}", s.handleService)

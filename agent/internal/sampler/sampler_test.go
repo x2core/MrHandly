@@ -178,8 +178,8 @@ func TestLatestWins(t *testing.T) {
 	_, ch := s.Subscribe()
 
 	step := func() {
-		go tc.tick()  // run receives the tick, then begins the sample
-		<-entered     // proves the previous broadcast finished
+		go tc.tick() // run receives the tick, then begins the sample
+		<-entered    // proves the previous broadcast finished
 		gate <- struct{}{}
 	}
 	step() // sample 1 broadcast, buffer = 1

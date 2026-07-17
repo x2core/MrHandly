@@ -13,11 +13,11 @@ import (
 type Fake struct {
 	mu       sync.Mutex
 	units    map[string]Unit
-	order    []string          // preserves ListUnits ordering
+	order    []string // preserves ListUnits ordering
 	subs     map[int]chan UnitChange
 	nextSub  int
-	actions  []Action          // recorded write actions
-	FailWith error             // if set, write actions return this error
+	actions  []Action // recorded write actions
+	FailWith error    // if set, write actions return this error
 }
 
 // Action is a recorded write against the fake.
