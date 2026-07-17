@@ -5,9 +5,10 @@
 import { isMock } from '../bridge'
 import { useFleet } from '../store'
 import { useUi, type FocusTab } from '../ui'
+import { useSsh } from '../ssh'
 import { THEMES, useTheme } from '../theme'
 import { pct } from '../format'
-import { IconBox, IconGrid, IconGear, IconPlus, IconPulse, IconRows, IconTerminal } from './icons'
+import { IconBox, IconCommand, IconGrid, IconGear, IconPlus, IconPulse, IconRows, IconTerminal } from './icons'
 
 export function Sidebar({ onAdd }: { onAdd: () => void }) {
   const order = useFleet((s) => s.order)
@@ -95,6 +96,7 @@ const VIEW_ITEMS: { id: FocusTab; label: string; Icon: (p: { className?: string 
   { id: 'services', label: 'Services', Icon: IconGear, needs: 'systemd' },
   { id: 'docker', label: 'Docker', Icon: IconBox, needs: 'docker' },
   { id: 'logs', label: 'Logs', Icon: IconTerminal, needs: 'either' },
+  { id: 'terminal', label: 'Terminal', Icon: IconCommand },
 ]
 
 function ViewNav() {
@@ -102,6 +104,7 @@ function ViewNav() {
   const host = useFleet((s) => (s.selected ? s.hosts[s.selected] : undefined))
   const tab = useUi((s) => s.tab)
   const setTab = useUi((s) => s.setTab)
+  const sshConnected = useSsh((s) => (selected ? s.connected[selected] : false))
 
   if (!selected || !host?.online) return null
   const systemd = !!host.info?.capabilities.systemd
@@ -126,6 +129,9 @@ function ViewNav() {
             >
               <v.Icon />
               <span className="font-plate text-[11px] uppercase tracking-wider">{v.label}</span>
+              {v.id === 'terminal' && sshConnected && !active && (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-signal shadow-[var(--glow)_rgb(var(--c-signal))]" />
+              )}
               {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-signal" />}
             </button>
           )

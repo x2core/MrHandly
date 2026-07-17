@@ -39,6 +39,26 @@ export interface Bridge {
   subscribeProcesses(address: string, cb: (items: Process[]) => void): () => void
   subscribeServices(address: string, cb: (items: Service[]) => void): () => void
   subscribeLogs(address: string, kind: LogKind, target: string, cb: (line: LogRecord) => void): () => void
+
+  // SSH terminal — a direct SSH session from this app, NOT an agent feature.
+  sshConnect(address: string, req: SshConnect): Promise<SshResult>
+  sshExec(address: string, line: string): Promise<{ output: string; exit: number }>
+  sshDisconnect(address: string): Promise<void>
+}
+
+export interface SshConnect {
+  username: string
+  port: number
+  auth: 'key' | 'password'
+  /** Password or key passphrase — sent to the backend, never stored. */
+  secret: string
+  keyPath?: string
+}
+
+export interface SshResult {
+  ok: boolean
+  motd?: string
+  error?: string
 }
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -136,6 +156,15 @@ function tauriBridge(): Bridge {
         off()
         void core().then(({ invoke }) => invoke('unsubscribe_logs', { address }))
       }
+    },
+    async sshConnect(address, req) {
+      return (await core()).invoke<SshResult>('ssh_connect', { address, ...req })
+    },
+    async sshExec(address, line) {
+      return (await core()).invoke<{ output: string; exit: number }>('ssh_exec', { address, line })
+    },
+    async sshDisconnect(address) {
+      await (await core()).invoke('ssh_disconnect', { address })
     },
   }
 }
@@ -314,6 +343,82 @@ function mockBridge(): Bridge {
       }, 700)
       return () => clearInterval(h)
     },
+    async sshConnect(_address, req) {
+      await new Promise((r) => setTimeout(r, 500)) // simulate handshake
+      if (!req.username.trim()) return { ok: false, error: 'username required' }
+      if (req.auth === 'password' && !req.secret) return { ok: false, error: 'password required' }
+      const motd = [
+        'Linux lab-01 6.1.0-18-amd64 #1 SMP Debian 6.1.76-1 x86_64 GNU/Linux',
+        '',
+        'The programs included with the Debian GNU/Linux system are free software.',
+        `Last login: ${new Date().toUTCString()} from 10.44.0.1`,
+      ].join('\n')
+      return { ok: true, motd }
+    },
+    async sshExec(_address, line) {
+      await new Promise((r) => setTimeout(r, 40 + Math.random() * 120))
+      return mockShell(line)
+    },
+    async sshDisconnect() {
+      /* no-op in demo */
+    },
+  }
+}
+
+// A small canned shell for the demo terminal. In the real app these round-trips
+// are a live SSH PTY; here they just make the UI feel real.
+function mockShell(line: string): { output: string; exit: number } {
+  const cmd = line.trim()
+  const [head, ...rest] = cmd.split(/\s+/)
+  const arg = rest.join(' ')
+  switch (head) {
+    case '':
+      return { output: '', exit: 0 }
+    case 'help':
+      return { output: 'available: ls, pwd, whoami, id, uname, uptime, df, free, ps, cat, echo, date, clear, exit', exit: 0 }
+    case 'whoami':
+      return { output: 'oikos', exit: 0 }
+    case 'id':
+      return { output: 'uid=1000(oikos) gid=1000(oikos) groups=1000(oikos),27(sudo),999(docker)', exit: 0 }
+    case 'pwd':
+      return { output: '/home/oikos', exit: 0 }
+    case 'ls':
+      return {
+        output: rest.includes('-la')
+          ? 'total 28\ndrwxr-xr-x 4 oikos oikos 4096 Jul 17 09:14 .\ndrwxr-xr-x 3 root  root  4096 Jul 10 11:02 ..\n-rw-r--r-- 1 oikos oikos  220 Jul 10 11:02 .bash_logout\n-rw-r--r-- 1 oikos oikos 3771 Jul 10 11:02 .bashrc\ndrwxr-xr-x 2 oikos oikos 4096 Jul 17 09:14 deploy\n-rwxr-xr-x 1 oikos oikos  512 Jul 16 21:40 run.sh'
+          : 'deploy  run.sh',
+        exit: 0,
+      }
+    case 'uname':
+      return { output: rest.includes('-a') ? 'Linux lab-01 6.1.0-18-amd64 #1 SMP Debian x86_64 GNU/Linux' : 'Linux', exit: 0 }
+    case 'uptime':
+      return { output: ' 09:14:22 up 17 days,  8:03,  1 user,  load average: 0.98, 0.58, 0.48', exit: 0 }
+    case 'df':
+      return {
+        output:
+          'Filesystem      Size  Used Avail Use% Mounted on\n/dev/nvme0n1p2  228G   74G  143G  35% /\ntmpfs           7.9G     0  7.9G   0% /dev/shm',
+        exit: 0,
+      }
+    case 'free':
+      return {
+        output:
+          '               total        used        free      shared  buff/cache   available\nMem:            15Gi       3.1Gi       9.8Gi       210Mi       2.6Gi        12Gi\nSwap:          2.0Gi          0B       2.0Gi',
+        exit: 0,
+      }
+    case 'ps':
+      return { output: 'PID   USER   %CPU  COMMAND\n198   root    2.1  /usr/sbin/sshd -D\n275   oikos   1.4  node /srv/app/index.js\n289   redis   0.9  redis-server *:6379', exit: 0 }
+    case 'cat':
+      if (arg.includes('os-release'))
+        return { output: 'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\nNAME="Debian GNU/Linux"\nVERSION_ID="12"\nID=debian', exit: 0 }
+      return { output: `cat: ${arg}: No such file or directory`, exit: 1 }
+    case 'echo':
+      return { output: arg, exit: 0 }
+    case 'date':
+      return { output: new Date().toUTCString(), exit: 0 }
+    case 'sudo':
+      return { output: `[sudo] password for oikos: \noikos is not in the sudoers file. This incident will be reported.`, exit: 1 }
+    default:
+      return { output: `bash: ${head}: command not found`, exit: 127 }
   }
 }
 

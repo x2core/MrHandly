@@ -72,6 +72,15 @@ export const IconTerminal = ({ className }: P) =>
 
 export const IconPlus = ({ className }: P) => svg(<path d="M8 3v10M3 8h10" />, className)
 
+export const IconCommand = ({ className }: P) =>
+  svg(
+    <>
+      <rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1" />
+      <path d="M4.3 6.2l2.2 1.9-2.2 1.9M8 10.2h3.4" />
+    </>,
+    className,
+  )
+
 export const IconGrid = ({ className }: P) =>
   svg(
     <>

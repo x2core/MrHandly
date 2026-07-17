@@ -250,6 +250,45 @@ fn unsubscribe_logs(state: State<AppState>, address: String) {
     }
 }
 
+// --- SSH terminal --------------------------------------------------------
+//
+// A terminal is a direct SSH session from this desktop app using the operator's
+// own credentials — NOT the Oikos agent, which has no exec endpoint by design
+// (CLAUDE.md §4.4). The real implementation opens an SSH PTY (e.g. via russh)
+// and streams it to the webview; that is intentionally not wired here. These
+// stubs keep the seam explicit and honest.
+
+#[derive(Clone, Serialize)]
+struct SshResult {
+    ok: bool,
+    motd: Option<String>,
+    error: Option<String>,
+}
+
+#[tauri::command]
+async fn ssh_connect(
+    _address: String,
+    _username: String,
+    _port: u16,
+    _auth: String,
+    _secret: String,
+    _key_path: Option<String>,
+) -> SshResult {
+    SshResult {
+        ok: false,
+        motd: None,
+        error: Some("SSH terminal backend not configured on this build".into()),
+    }
+}
+
+#[tauri::command]
+async fn ssh_exec(_address: String, _line: String) -> Result<serde_json::Value, String> {
+    Err("SSH terminal backend not configured on this build".into())
+}
+
+#[tauri::command]
+fn ssh_disconnect(_address: String) {}
+
 fn stringify<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
@@ -354,7 +393,10 @@ pub fn run() {
             service_action,
             container_action,
             subscribe_logs,
-            unsubscribe_logs
+            unsubscribe_logs,
+            ssh_connect,
+            ssh_exec,
+            ssh_disconnect
         ])
         .run(tauri::generate_context!())
         .expect("error while running Oikos");

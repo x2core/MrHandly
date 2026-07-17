@@ -12,6 +12,7 @@ import { ProcessesView } from './ProcessesView'
 import { ServicesView } from './ServicesView'
 import { DockerView } from './DockerView'
 import { LogViewer } from './LogViewer'
+import { Terminal } from './Terminal'
 
 interface FocusProps {
   host: HostState
@@ -77,6 +78,7 @@ export function FocusView({ host, onRename, onRemove }: FocusProps) {
         {tab === 'services' && <ServicesView address={peer.address} />}
         {tab === 'docker' && <DockerView address={peer.address} />}
         {tab === 'logs' && <LogViewer address={peer.address} dockerAvailable={docker} />}
+        {tab === 'terminal' && <Terminal address={peer.address} hostName={peer.name} />}
       </div>
     </div>
   )

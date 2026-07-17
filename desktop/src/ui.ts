@@ -4,7 +4,7 @@
 
 import { create } from 'zustand'
 
-export type FocusTab = 'performance' | 'processes' | 'services' | 'docker' | 'logs'
+export type FocusTab = 'performance' | 'processes' | 'services' | 'docker' | 'logs' | 'terminal'
 
 interface UiStore {
   tab: FocusTab
