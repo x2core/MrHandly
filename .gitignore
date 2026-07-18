@@ -1,8 +1,11 @@
 # No compiled binaries in git. Ever. (CLAUDE.md §4.6)
 # CI builds, Releases publishes, checksums verify. If you are about to `git add`
 # a binary, the answer is no — tag a release instead.
-oikos-agent
-oikos-agent-*
+# NOTE: these are anchored (leading slash) so they match only a built binary at
+# these locations — NOT the source dir agent/cmd/oikos-agent/.
+/oikos-agent
+/agent/oikos-agent
+/oikos-agent-*
 *.exe
 *.dll
 *.so
